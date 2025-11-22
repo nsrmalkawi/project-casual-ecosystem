@@ -1,169 +1,57 @@
 // src/features/data-entry/SalesEntry.jsx
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { loadData, saveData } from "../../utils/storage";
+import { BRAND_OPTIONS, OUTLET_OPTIONS } from "../../config/lookups";
 
-const STORAGE_KEY = "pc_sales";
+function makeId() {
+  return Date.now().toString() + "-" + Math.random().toString(16).slice(2);
+}
 
-function SalesEntry() {
-  const [form, setForm] = useState({
-    date: "",
-    brand: "",
-    outlet: "",
-    channel: "Dine-in",
-    orders: "",
-    netSales: "",
-    deliveryPlatform: "",
-    notes: "",
-  });
+export default function SalesEntry() {
+  const [rows, setRows] = useState(() => loadData("pc_sales", []) || []);
 
-  const [rows, setRows] = useState([]);
-
-  // Load saved data on first render
   useEffect(() => {
-    const stored = loadData(STORAGE_KEY, []);
-    setRows(stored);
-  }, []);
-
-  // Save every time rows change
-  useEffect(() => {
-    saveData(STORAGE_KEY, rows);
+    saveData("pc_sales", rows);
   }, [rows]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+  const addRow = () => {
+    setRows((prev) => [
+      ...prev,
+      {
+        id: makeId(),
+        date: "",
+        brand: "",
+        outlet: "",
+        netSales: "",
+        notes: "",
+      },
+    ]);
   };
 
-  const handleAdd = () => {
-    if (!form.date || !form.brand || !form.outlet || !form.netSales) {
-      alert("Date, Brand, Outlet, and Net Sales are required.");
-      return;
-    }
-
-    const newRow = {
-      id: Date.now(),
-      ...form,
-    };
-
-    setRows((prev) => [...prev, newRow]);
-
-    setForm({
-      date: "",
-      brand: "",
-      outlet: "",
-      channel: "Dine-in",
-      orders: "",
-      netSales: "",
-      deliveryPlatform: "",
-      notes: "",
-    });
+  const handleChange = (rowId, field, value) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === rowId ? { ...row, [field]: value } : row
+      )
+    );
   };
 
-  const totalSales = rows.reduce(
-    (sum, row) => sum + (Number(row.netSales) || 0),
-    0
-  );
+  const handleDelete = (rowId) => {
+    setRows((prev) => prev.filter((r) => r.id !== rowId));
+  };
+
+  const formatNumber = (n) => {
+    const x = Number(n || 0);
+    if (Number.isNaN(x)) return "";
+    return x.toFixed(3);
+  };
 
   return (
     <div className="card">
-      <h3 className="card-title">Sales Entry</h3>
+      <h3 className="card-title">Sales</h3>
       <p className="page-subtitle">
-        Daily sales by brand, outlet, and channel. This feeds the daily/weekly
-        dashboards and outlet strategy analysis.
+        Net sales by date, brand, and outlet. Uses dropdowns for consistency.
       </p>
-
-      <div className="form-grid">
-        <div className="form-field">
-          <label>Date</label>
-          <input
-            type="date"
-            name="date"
-            value={form.date}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Brand</label>
-          <input
-            type="text"
-            name="brand"
-            placeholder="Buns Meat Dough, Fish Face..."
-            value={form.brand}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Outlet</label>
-          <input
-            type="text"
-            name="outlet"
-            placeholder="Abdoun, Cloud Kitchen..."
-            value={form.outlet}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Channel</label>
-          <select
-            name="channel"
-            value={form.channel}
-            onChange={handleChange}
-          >
-            <option value="Dine-in">Dine-in</option>
-            <option value="Delivery">Delivery</option>
-            <option value="Takeaway">Takeaway</option>
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label>Orders (count)</label>
-          <input
-            type="number"
-            name="orders"
-            value={form.orders}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Net Sales (JOD)</label>
-          <input
-            type="number"
-            name="netSales"
-            value={form.netSales}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Delivery Platform</label>
-          <input
-            type="text"
-            name="deliveryPlatform"
-            placeholder="Talabat, Careem..."
-            value={form.deliveryPlatform}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field" style={{ gridColumn: "1 / -1" }}>
-          <label>Notes</label>
-          <textarea
-            name="notes"
-            rows={2}
-            placeholder="Promos, issues, special events..."
-            value={form.notes}
-            onChange={handleChange}
-          />
-        </div>
-      </div>
-
-      <button className="primary-btn" onClick={handleAdd}>
-        Add Sales Row
-      </button>
 
       <div className="table-wrapper">
         <table>
@@ -172,29 +60,91 @@ function SalesEntry() {
               <th>Date</th>
               <th>Brand</th>
               <th>Outlet</th>
-              <th>Channel</th>
-              <th>Orders</th>
               <th>Net Sales (JOD)</th>
-              <th>Delivery Platform</th>
               <th>Notes</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan="8">No sales data added yet.</td>
+                <td colSpan="6">No sales rows yet.</td>
               </tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.date}</td>
-                  <td>{row.brand}</td>
-                  <td>{row.outlet}</td>
-                  <td>{row.channel}</td>
-                  <td>{row.orders}</td>
-                  <td>{row.netSales}</td>
-                  <td>{row.deliveryPlatform}</td>
-                  <td>{row.notes}</td>
+                  <td>
+                    <input
+                      type="date"
+                      required
+                      value={row.date || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "date", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <select
+                      value={row.brand || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "brand", e.target.value)
+                      }
+                    >
+                      <option value="">Select brand…</option>
+                      {BRAND_OPTIONS.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={row.outlet || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "outlet", e.target.value)
+                      }
+                    >
+                      <option value="">Select outlet…</option>
+                      {OUTLET_OPTIONS.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      required
+                      value={row.netSales || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "netSales", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleChange(
+                          row.id,
+                          "netSales",
+                          formatNumber(e.target.value)
+                        )
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.notes || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "notes", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <button type="button" onClick={() => handleDelete(row.id)}>
+                      ✕
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -202,11 +152,14 @@ function SalesEntry() {
         </table>
       </div>
 
-      <p className="page-subtitle">
-        Total Net Sales in table: <strong>{totalSales.toFixed(2)} JOD</strong>
-      </p>
+      <button
+        type="button"
+        className="primary-btn"
+        style={{ marginTop: 8 }}
+        onClick={addRow}
+      >
+        + Add Sales Row
+      </button>
     </div>
   );
 }
-
-export default SalesEntry;

@@ -1,149 +1,137 @@
 // src/features/data-entry/RentOpexEntry.jsx
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { loadData, saveData } from "../../utils/storage";
+import { OUTLET_OPTIONS, RENT_OPEX_CATEGORIES } from "../../config/lookups";
 
-const STORAGE_KEY = "pc_rent_opex";
+function makeId() {
+  return Date.now().toString() + "-" + Math.random().toString(16).slice(2);
+}
 
-function RentOpexEntry() {
-  const [form, setForm] = useState({
-    month: "",
-    outlet: "",
-    category: "",
-    amount: "",
-    notes: "",
-  });
-
-  const [rows, setRows] = useState([]);
+export default function RentOpexEntry() {
+  const [rows, setRows] = useState(() => loadData("pc_rent_opex", []) || []);
 
   useEffect(() => {
-    setRows(loadData(STORAGE_KEY, []));
-  }, []);
-
-  useEffect(() => {
-    saveData(STORAGE_KEY, rows);
+    saveData("pc_rent_opex", rows);
   }, [rows]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+  const addRow = () => {
+    setRows((prev) => [
+      ...prev,
+      {
+        id: makeId(),
+        date: "",
+        outlet: "",
+        category: "",
+        amount: "",
+        notes: "",
+      },
+    ]);
   };
 
-  const handleAdd = () => {
-    if (!form.month || !form.outlet || !form.category || !form.amount) {
-      alert("Month, Outlet, Category, and Amount are required.");
-      return;
-    }
-
-    const newRow = {
-      id: Date.now(),
-      ...form,
-    };
-
-    setRows((prev) => [...prev, newRow]);
-
-    setForm({
-      month: "",
-      outlet: "",
-      category: "",
-      amount: "",
-      notes: "",
-    });
+  const handleChange = (rowId, field, value) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === rowId ? { ...row, [field]: value } : row
+      )
+    );
   };
 
-  const totalOpex = rows.reduce(
-    (sum, row) => sum + (Number(row.amount) || 0),
-    0
-  );
+  const handleDelete = (rowId) => {
+    setRows((prev) => prev.filter((r) => r.id !== rowId));
+  };
 
   return (
     <div className="card">
       <h3 className="card-title">Rent & Opex</h3>
       <p className="page-subtitle">
-        Record fixed costs like rent, utilities, salaries, and other OPEX. This
-        is used for outlet profitability and outlet format decisions.
+        Operating expenses by outlet and category. Feeds EBITDA.
       </p>
-
-      <div className="form-grid">
-        <div className="form-field">
-          <label>Month</label>
-          <input
-            type="month"
-            name="month"
-            value={form.month}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Outlet</label>
-          <input
-            type="text"
-            name="outlet"
-            value={form.outlet}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Category</label>
-          <input
-            type="text"
-            name="category"
-            placeholder="Rent, Utilities, Salaries, Marketing..."
-            value={form.category}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Amount (JOD)</label>
-          <input
-            type="number"
-            name="amount"
-            value={form.amount}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field" style={{ gridColumn: "1 / -1" }}>
-          <label>Notes</label>
-          <textarea
-            name="notes"
-            rows={2}
-            value={form.notes}
-            onChange={handleChange}
-          />
-        </div>
-      </div>
-
-      <button className="primary-btn" onClick={handleAdd}>
-        Add Opex Row
-      </button>
 
       <div className="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Month</th>
+              <th>Date</th>
               <th>Outlet</th>
               <th>Category</th>
-              <th>Amount</th>
+              <th>Amount (JOD)</th>
               <th>Notes</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan="5">No rent/opex recorded yet.</td>
+                <td colSpan="6">No rent/opex rows yet.</td>
               </tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.month}</td>
-                  <td>{row.outlet}</td>
-                  <td>{row.category}</td>
-                  <td>{row.amount}</td>
-                  <td>{row.notes}</td>
+                  <td>
+                    <input
+                      type="date"
+                      required
+                      value={row.date || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "date", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <select
+                      value={row.outlet || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "outlet", e.target.value)
+                      }
+                    >
+                      <option value="">Select outlet…</option>
+                      {OUTLET_OPTIONS.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={row.category || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "category", e.target.value)
+                      }
+                    >
+                      <option value="">Select category…</option>
+                      {RENT_OPEX_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      required
+                      value={row.amount || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "amount", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.notes || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "notes", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <button type="button" onClick={() => handleDelete(row.id)}>
+                      ✕
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -151,11 +139,14 @@ function RentOpexEntry() {
         </table>
       </div>
 
-      <p className="page-subtitle">
-        Total Opex in table: <strong>{totalOpex.toFixed(3)} JOD</strong>
-      </p>
+      <button
+        type="button"
+        className="primary-btn"
+        style={{ marginTop: 8 }}
+        onClick={addRow}
+      >
+        + Add Rent/Opex Row
+      </button>
     </div>
   );
 }
-
-export default RentOpexEntry;

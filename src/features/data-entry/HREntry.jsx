@@ -1,183 +1,158 @@
 // src/features/data-entry/HREntry.jsx
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { loadData, saveData } from "../../utils/storage";
+import { OUTLET_OPTIONS, HR_ROLES } from "../../config/lookups";
 
-const STORAGE_KEY = "pc_hr_labor";
+function makeId() {
+  return Date.now().toString() + "-" + Math.random().toString(16).slice(2);
+}
 
-function HREntry() {
-  const [form, setForm] = useState({
-    date: "",
-    employeeName: "",
-    position: "",
-    outlet: "",
-    hoursWorked: "",
-    hourlyRate: "",
-    notes: "",
-  });
-
-  const [rows, setRows] = useState([]);
+export default function HREntry() {
+  const [rows, setRows] = useState(() => loadData("pc_hr_labor", []) || []);
 
   useEffect(() => {
-    setRows(loadData(STORAGE_KEY, []));
-  }, []);
-
-  useEffect(() => {
-    saveData(STORAGE_KEY, rows);
+    saveData("pc_hr_labor", rows);
   }, [rows]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+  const addRow = () => {
+    setRows((prev) => [
+      ...prev,
+      {
+        id: makeId(),
+        date: "",
+        outlet: "",
+        employee: "",
+        role: "",
+        hours: "",
+        laborCost: "",
+        notes: "",
+      },
+    ]);
   };
 
-  const handleAdd = () => {
-    if (!form.date || !form.employeeName || !form.outlet) {
-      alert("Date, Employee, and Outlet are required.");
-      return;
-    }
-
-    const hours = Number(form.hoursWorked) || 0;
-    const rate = Number(form.hourlyRate) || 0;
-    const laborCost = hours * rate;
-
-    const newRow = {
-      id: Date.now(),
-      ...form,
-      laborCost,
-    };
-
-    setRows((prev) => [...prev, newRow]);
-
-    setForm({
-      date: "",
-      employeeName: "",
-      position: "",
-      outlet: "",
-      hoursWorked: "",
-      hourlyRate: "",
-      notes: "",
-    });
+  const handleChange = (rowId, field, value) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === rowId ? { ...row, [field]: value } : row
+      )
+    );
   };
 
-  const totalLabor = rows.reduce(
-    (sum, row) => sum + (Number(row.laborCost) || 0),
-    0
-  );
+  const handleDelete = (rowId) => {
+    setRows((prev) => prev.filter((r) => r.id !== rowId));
+  };
 
   return (
     <div className="card">
-      <h3 className="card-title">HR & Labor / SOPs</h3>
+      <h3 className="card-title">HR / Labor</h3>
       <p className="page-subtitle">
-        Capture labor cost inputs per outlet. This will later connect to labor
-        % vs sales and employee assessments/SOPs.
+        Labor cost per employee and outlet. Used in labor % of sales and EBITDA.
       </p>
-
-      <div className="form-grid">
-        <div className="form-field">
-          <label>Date</label>
-          <input
-            type="date"
-            name="date"
-            value={form.date}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Employee Name</label>
-          <input
-            type="text"
-            name="employeeName"
-            value={form.employeeName}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Position</label>
-          <input
-            type="text"
-            name="position"
-            value={form.position}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Outlet</label>
-          <input
-            type="text"
-            name="outlet"
-            value={form.outlet}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Hours Worked</label>
-          <input
-            type="number"
-            name="hoursWorked"
-            value={form.hoursWorked}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Hourly Rate (JOD)</label>
-          <input
-            type="number"
-            name="hourlyRate"
-            value={form.hourlyRate}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-field" style={{ gridColumn: "1 / -1" }}>
-          <label>Notes</label>
-          <textarea
-            name="notes"
-            rows={2}
-            value={form.notes}
-            onChange={handleChange}
-          />
-        </div>
-      </div>
-
-      <button className="primary-btn" onClick={handleAdd}>
-        Add Labor Row
-      </button>
 
       <div className="table-wrapper">
         <table>
           <thead>
             <tr>
               <th>Date</th>
-              <th>Employee</th>
-              <th>Position</th>
               <th>Outlet</th>
+              <th>Employee</th>
+              <th>Role</th>
               <th>Hours</th>
-              <th>Rate</th>
-              <th>Labor Cost</th>
+              <th>Labor Cost (JOD)</th>
               <th>Notes</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan="8">No labor entries yet.</td>
+                <td colSpan="8">No HR rows yet.</td>
               </tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.date}</td>
-                  <td>{row.employeeName}</td>
-                  <td>{row.position}</td>
-                  <td>{row.outlet}</td>
-                  <td>{row.hoursWorked}</td>
-                  <td>{row.hourlyRate}</td>
-                  <td>{row.laborCost?.toFixed(3)}</td>
-                  <td>{row.notes}</td>
+                  <td>
+                    <input
+                      type="date"
+                      value={row.date || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "date", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <select
+                      value={row.outlet || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "outlet", e.target.value)
+                      }
+                    >
+                      <option value="">Select outlet…</option>
+                      {OUTLET_OPTIONS.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.employee || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "employee", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <select
+                      value={row.role || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "role", e.target.value)
+                      }
+                    >
+                      <option value="">Select role…</option>
+                      {HR_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={row.hours || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "hours", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={row.laborCost || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "laborCost", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.notes || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "notes", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <button type="button" onClick={() => handleDelete(row.id)}>
+                      ✕
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -185,12 +160,14 @@ function HREntry() {
         </table>
       </div>
 
-      <p className="page-subtitle">
-        Total Labor Cost in table:{" "}
-        <strong>{totalLabor.toFixed(3)} JOD</strong>
-      </p>
+      <button
+        type="button"
+        className="primary-btn"
+        style={{ marginTop: 8 }}
+        onClick={addRow}
+      >
+        + Add HR Row
+      </button>
     </div>
   );
 }
-
-export default HREntry;
