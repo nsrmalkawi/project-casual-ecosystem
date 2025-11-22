@@ -1,4 +1,4 @@
-// server.mjs
+// web-server.mjs
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -8,26 +8,22 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
-// Resolve __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5174;
 
-// Basic middleware
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-// ---- STATIC FRONTEND (Vite build in dist) ----
 const distPath = path.join(__dirname, "dist");
 console.log("Serving static files from:", distPath);
 app.use(express.static(distPath));
 
-// ---- GEMINI SETUP ----
 const hasKey = !!process.env.GEMINI_API_KEY;
 const genAI = hasKey ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
-const modelName = "gemini-1.5-flash-latest";
+const modelName = "gemini-2.0-flash-lite";
 
 async function runModel(prompt) {
   if (!hasKey || !genAI) {
@@ -49,7 +45,6 @@ async function runModel(prompt) {
   return text || "";
 }
 
-// ---- HEALTH CHECK ----
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
@@ -59,7 +54,6 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// ---- AI: REPORT SUMMARY ----
 app.post("/api/ai-report", async (req, res) => {
   try {
     const payload = req.body?.payload || req.body || {};
@@ -92,7 +86,6 @@ Keep it practical and focused. Reply as plain text (no JSON).
   }
 });
 
-// ---- AI: MENU ENGINEERING ACTIONS ----
 app.post("/api/ai-menu-actions", async (req, res) => {
   try {
     const payload = req.body || {};
@@ -126,7 +119,6 @@ Reply as simple bullet points.
   }
 });
 
-// ---- AI: UNUSUAL METRICS / ANOMALIES ----
 app.post("/api/ai-unusual-metrics", async (req, res) => {
   try {
     const payload = req.body || {};
@@ -162,7 +154,6 @@ Reply as a bullet list grouped by outlet/brand.
   }
 });
 
-// ---- AI: EXPLANATION ----
 app.post("/api/ai-explain", async (req, res) => {
   try {
     const { context, question } = req.body || {};
@@ -197,13 +188,11 @@ Reply in 2–4 short paragraphs + bullet actions.
   }
 });
 
-// ---- SPA FALLBACK: SERVE REACT APP FOR ALL NON-API ROUTES ----
-// IMPORTANT: use RegExp instead of "*" to avoid path-to-regexp error
-app.get(/^(?!\/api\/).*$/, (req, res) => {
+// SPA fallback: serve React app for all non-API routes
+app.get(/^(?!\/api\/).*/, (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
-// ---- START SERVER ----
 app.listen(PORT, () => {
   console.log(
     `Project Casual ecosystem server listening on http://localhost:${PORT}`
