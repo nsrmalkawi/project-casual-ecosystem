@@ -21,6 +21,7 @@ app.use(express.json({ limit: "1mb" }));
 
 // ---- STATIC FRONTEND (Vite build in dist) ----
 const distPath = path.join(__dirname, "dist");
+console.log("Serving static files from:", distPath);
 app.use(express.static(distPath));
 
 // ---- GEMINI SETUP ----
@@ -28,7 +29,6 @@ const hasKey = !!process.env.GEMINI_API_KEY;
 const genAI = hasKey ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 const modelName = "gemini-2.0-flash-lite";
 
-// Helper to call Gemini
 async function runModel(prompt) {
   if (!hasKey || !genAI) {
     throw new Error("GEMINI_API_KEY is not set or invalid");
@@ -135,7 +135,7 @@ app.post("/api/ai-unusual-metrics", async (req, res) => {
     const prompt = `
 You are a data anomaly detector for an F&B group.
 You receive compressed metrics (by outlet, brand, date) including sales,
-food cost %, labor %, rent %, EBITDA, and other ratios.
+food cost %, labor %, rent, EBITDA, and other ratios.
 
 Data (JSON):
 ${json}
@@ -162,7 +162,7 @@ Reply as a bullet list grouped by outlet/brand.
   }
 });
 
-// ---- AI: EXPLANATION (for a specific KPI or widget) ----
+// ---- AI: EXPLANATION ----
 app.post("/api/ai-explain", async (req, res) => {
   try {
     const { context, question } = req.body || {};
@@ -197,12 +197,14 @@ Reply in 2–4 short paragraphs + bullet actions.
   }
 });
 
-// ---- SPA FALLBACK (serve React app for all non-API routes) ----
+// ---- SPA FALLBACK: SERVE REACT APP FOR ALL NON-API ROUTES ----
 app.get("*", (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
 // ---- START SERVER ----
 app.listen(PORT, () => {
-  console.log(`Project Casual ecosystem server listening on http://localhost:${PORT}`);
+  console.log(
+    `Project Casual ecosystem server listening on http://localhost:${PORT}`
+  );
 });
