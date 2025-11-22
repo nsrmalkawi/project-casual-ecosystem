@@ -1,355 +1,201 @@
 // src/features/admin/DataImportExport.jsx
 import { useState } from "react";
 
-const STORAGE_KEYS = [
-  { key: "pc_sales", label: "Sales" },
-  { key: "pc_purchases", label: "Purchases / COGS" },
-  { key: "pc_waste", label: "Waste" },
-  { key: "pc_inventory", label: "Inventory / Items Master" },
-  { key: "pc_rent_opex", label: "Rent & Opex" },
-  { key: "pc_hr_labor", label: "HR / Labor" },
-  { key: "pc_petty_cash", label: "Petty Cash" },
-  { key: "pc_recipes", label: "Recipes & Sub-recipes" },
-  { key: "pc_menu_engineering", label: "Menu Engineering" },
-  { key: "pc_targets", label: "Targets / Budgets" },
-  { key: "pc_scenarios", label: "Scenario Planning" },
-  { key: "pc_branding", label: "Branding & Marketing" },
-  { key: "pc_action_plan", label: "Action Plan" },
-];
+/**
+ * Collect all localStorage keys starting with "pc_" into one object.
+ */
+function collectLocalSnapshot() {
+  const snapshot = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    if (!key.startsWith("pc_")) continue;
 
-function timestampName() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    d.getFullYear() +
-    pad(d.getMonth() + 1) +
-    pad(d.getDate()) +
-    "-" +
-    pad(d.getHours()) +
-    pad(d.getMinutes())
-  );
+    try {
+      const raw = localStorage.getItem(key);
+      snapshot[key] = raw ? JSON.parse(raw) : null;
+    } catch {
+      snapshot[key] = null;
+    }
+  }
+  return snapshot;
 }
 
-function DataImportExport() {
-  const [selectedKeys, setSelectedKeys] = useState(
-    () => new Set(STORAGE_KEYS.map((k) => k.key)) // all selected by default
-  );
-  const [importStatus, setImportStatus] = useState("");
-  const [exportStatus, setExportStatus] = useState("");
-  const [lastImportedSummary, setLastImportedSummary] = useState(null);
-
-  const toggleKey = (key) => {
-    setSelectedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const handleSelectAll = () => {
-    setSelectedKeys(new Set(STORAGE_KEYS.map((k) => k.key)));
-  };
-
-  const handleClearAll = () => {
-    setSelectedKeys(new Set());
-  };
-
-  const handleExport = () => {
+/**
+ * Apply a snapshot (map of key -> value) into localStorage.
+ */
+function applyLocalSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  Object.entries(snapshot).forEach(([key, value]) => {
+    if (!key.startsWith("pc_")) return;
     try {
-      const payload = {};
-      let count = 0;
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.error("Failed to set localStorage key", key, e);
+    }
+  });
+}
 
-      STORAGE_KEYS.forEach(({ key }) => {
-        if (!selectedKeys.has(key)) return;
-        const raw = localStorage.getItem(key);
-        if (raw != null) {
-          try {
-            payload[key] = JSON.parse(raw);
-          } catch {
-            // if not valid JSON, store raw string
-            payload[key] = raw;
-          }
-          count += 1;
-        }
+export default function DataImportExport() {
+  const [status, setStatus] = useState("");
+
+  // ---- Local JSON export/import ----
+
+  const handleExportLocal = () => {
+    const snapshot = collectLocalSnapshot();
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `project-casual-backup-${new Date()
+      .toISOString()
+      .slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportLocal = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        applyLocalSnapshot(data);
+        setStatus("Local import successful.");
+      } catch (err) {
+        console.error("Import error", err);
+        setStatus("Failed to import local JSON.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // ---- Cloud DB backup/restore ----
+
+  const handleSaveToCloud = async () => {
+    try {
+      setStatus("Saving snapshot to Cloud DB...");
+      const snapshot = collectLocalSnapshot();
+
+      const resp = await fetch("/api/cloud-save-snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snapshot }),
       });
 
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `project-casual-data-${timestampName()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Cloud save failed: ${resp.status} ${text}`);
+      }
 
-      setExportStatus(
-        count === 0
-          ? "No data found for selected keys. Exported empty JSON."
-          : `Exported ${count} collections to JSON file.`
-      );
+      setStatus("Cloud snapshot saved successfully.");
     } catch (err) {
-      console.error("Export error:", err);
-      setExportStatus("Export failed: " + err.message);
+      console.error("Cloud save error", err);
+      setStatus("Cloud save failed. Check console and server logs.");
     }
   };
 
-  const handleImportFileChange = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-
-    setImportStatus("Reading file...");
-    setLastImportedSummary(null);
-
+  const handleLoadFromCloud = async () => {
     try {
-      const text = await file.text();
-      let parsed;
-      try {
-        parsed = JSON.parse(text);
-      } catch (err) {
-        throw new Error("File is not valid JSON.");
+      setStatus("Loading snapshot from Cloud DB...");
+      const resp = await fetch("/api/cloud-load-snapshot");
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Cloud load failed: ${resp.status} ${text}`);
       }
 
-      if (typeof parsed !== "object" || parsed === null) {
-        throw new Error("JSON must be an object of key → value.");
+      const data = await resp.json();
+      if (!data.snapshot) {
+        setStatus("No cloud snapshot found yet.");
+        return;
       }
 
-      const knownKeys = new Set(STORAGE_KEYS.map((k) => k.key));
-      const summary = [];
-      let applied = 0;
-      let skipped = 0;
-
-      Object.entries(parsed).forEach(([key, value]) => {
-        if (!knownKeys.has(key)) {
-          skipped += 1;
-          summary.push({
-            key,
-            action: "skipped (unknown key)",
-          });
-          return;
-        }
-        try {
-          localStorage.setItem(key, JSON.stringify(value ?? null));
-          applied += 1;
-          const size =
-            Array.isArray(value) || typeof value === "object"
-              ? Array.isArray(value)
-                ? value.length + " rows"
-                : "object"
-              : "value";
-          summary.push({
-            key,
-            action: "imported",
-            size,
-          });
-        } catch (err) {
-          skipped += 1;
-          summary.push({
-            key,
-            action: "error: " + err.message,
-          });
-        }
-      });
-
-      setLastImportedSummary({ applied, skipped, details: summary });
-      setImportStatus(
-        `Import finished. Applied ${applied} keys, skipped ${skipped}.`
-      );
+      applyLocalSnapshot(data.snapshot);
+      setStatus("Cloud snapshot loaded into localStorage.");
     } catch (err) {
-      console.error("Import error:", err);
-      setImportStatus("Import failed: " + err.message);
-    } finally {
-      // reset file input so same file can be selected again if needed
-      e.target.value = "";
+      console.error("Cloud load error", err);
+      setStatus("Cloud load failed. Check console and server logs.");
     }
   };
 
   return (
     <div className="card">
-      <h3 className="card-title">Data Import / Export</h3>
+      <h3 className="card-title">Data Import &amp; Export</h3>
       <p className="page-subtitle">
-        Backup or restore your ecosystem (localStorage). Use JSON files to move
-        data between machines or create snapshots before major changes.
+        Backup or restore all <code>pc_*</code> data either to a local JSON
+        file or to the Cloud DB.
       </p>
 
-      {/* Key selection */}
-      <div
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 8,
-          padding: 8,
-          marginBottom: 12,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginBottom: 8,
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
+      {/* Local JSON backup */}
+      <div style={{ marginBottom: 16 }}>
+        <h4>Local JSON Backup</h4>
+        <button
+          type="button"
+          className="primary-btn"
+          style={{ marginRight: 8, marginTop: 4 }}
+          onClick={handleExportLocal}
         >
-          <span style={{ fontSize: 13, fontWeight: 500 }}>
-            Collections to include:
-          </span>
-          <button
-            type="button"
-            className="secondary-btn"
-            onClick={handleSelectAll}
-          >
-            Select all
-          </button>
-          <button
-            type="button"
-            className="secondary-btn"
-            onClick={handleClearAll}
-          >
-            Clear all
-          </button>
-        </div>
+          Export local data to JSON
+        </button>
 
-        <div
+        <label
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 4,
+            display: "inline-block",
+            marginTop: 8,
+            padding: "6px 12px",
+            borderRadius: 4,
+            border: "1px solid #d4d4d4",
+            cursor: "pointer",
           }}
         >
-          {STORAGE_KEYS.map(({ key, label }) => (
-            <label
-              key={key}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 13,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={selectedKeys.has(key)}
-                onChange={() => toggleKey(key)}
-              />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
+          Import from JSON file
+          <input
+            type="file"
+            accept="application/json"
+            style={{ display: "none" }}
+            onChange={handleImportLocal}
+          />
+        </label>
       </div>
 
-      {/* Export section */}
-      <div
-        style={{
-          marginBottom: 12,
-          paddingBottom: 12,
-          borderBottom: "1px solid #e5e7eb",
-        }}
-      >
-        <h4
-          style={{
-            fontSize: 14,
-            fontWeight: 600,
-            marginBottom: 4,
-          }}
-        >
-          Export data
-        </h4>
-        <p className="page-subtitle">
-          Downloads a JSON file containing the selected collections.
+      <hr style={{ margin: "16px 0" }} />
+
+      {/* Cloud DB backup */}
+      <div>
+        <h4>Cloud DB Backup</h4>
+        <p style={{ fontSize: 13, marginBottom: 8 }}>
+          Uses the <code>pc_snapshots</code> table in your PostgreSQL database
+          via <code>/api/cloud-save-snapshot</code> and{" "}
+          <code>/api/cloud-load-snapshot</code>.
         </p>
         <button
           type="button"
           className="primary-btn"
-          onClick={handleExport}
-          style={{ marginTop: 4 }}
+          style={{ marginRight: 8, marginTop: 4 }}
+          onClick={handleSaveToCloud}
         >
-          Export selected to JSON
+          Save current data to Cloud DB
         </button>
-        {exportStatus && (
-          <p
-            style={{
-              fontSize: 12,
-              marginTop: 6,
-              color: "#4b5563",
-            }}
-          >
-            {exportStatus}
-          </p>
-        )}
-      </div>
-
-      {/* Import section */}
-      <div>
-        <h4
-          style={{
-            fontSize: 14,
-            fontWeight: 600,
-            marginBottom: 4,
-          }}
-        >
-          Import data
-        </h4>
-        <p className="page-subtitle">
-          Choose a JSON file previously exported from this tool. Matching keys
-          will overwrite current data in localStorage.
-        </p>
-        <input
-          type="file"
-          accept="application/json"
-          onChange={handleImportFileChange}
+        <button
+          type="button"
+          className="secondary-btn"
           style={{ marginTop: 4 }}
-        />
-        {importStatus && (
-          <p
-            style={{
-              fontSize: 12,
-              marginTop: 6,
-              color: importStatus.startsWith("Import failed")
-                ? "#b91c1c"
-                : "#4b5563",
-            }}
-          >
-            {importStatus}
-          </p>
-        )}
-
-        {lastImportedSummary && (
-          <div
-            style={{
-              marginTop: 8,
-              border: "1px solid #e5e7eb",
-              borderRadius: 8,
-              padding: 8,
-              maxHeight: 220,
-              overflowY: "auto",
-              backgroundColor: "#f9fafb",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 12,
-                marginBottom: 4,
-                fontWeight: 600,
-              }}
-            >
-              Import summary
-            </div>
-            <ul style={{ paddingLeft: 18, margin: 0, fontSize: 12 }}>
-              {lastImportedSummary.details.map((d, idx) => (
-                <li key={idx}>
-                  <strong>{d.key}</strong>: {d.action}
-                  {d.size ? ` (${d.size})` : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+          onClick={handleLoadFromCloud}
+        >
+          Load latest snapshot from Cloud DB
+        </button>
       </div>
+
+      {status && (
+        <p style={{ marginTop: 12, fontSize: 13, color: "#4b5563" }}>
+          {status}
+        </p>
+      )}
     </div>
   );
 }
-
-export default DataImportExport;

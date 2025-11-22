@@ -12,6 +12,38 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+// --- Cloud DB (Postgres) setup ---
+// npm install pg
+import pkg from "pg";
+const { Pool } = pkg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
+});
+
+async function ensureCloudTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pc_snapshots (
+        id integer PRIMARY KEY,
+        snapshot jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    console.log("pc_snapshots table ready");
+  } catch (err) {
+    console.error("Failed to ensure pc_snapshots table", err);
+  }
+}
+
+ensureCloudTable().catch((err) =>
+  console.error("ensureCloudTable failed", err)
+);
+// --- end Cloud DB setup ---
 
 dotenv.config();
 
@@ -322,6 +354,60 @@ app.post("/api/users/update", (req, res) => {
     res.status(500).json({ error: "UPDATE_USER_ERROR" });
   }
 });
+// --- Cloud snapshot API ---
+// Save all pc_* keys from the frontend as one JSON blob
+app.post("/api/cloud-save-snapshot", async (req, res) => {
+  try {
+    const snapshot = req.body && req.body.snapshot;
+    if (!snapshot || typeof snapshot !== "object") {
+      return res
+        .status(400)
+        .json({ error: "BAD_REQUEST", message: "snapshot must be an object" });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO pc_snapshots (id, snapshot, updated_at)
+      VALUES (1, $1, now())
+      ON CONFLICT (id)
+      DO UPDATE SET snapshot = EXCLUDED.snapshot,
+                    updated_at = EXCLUDED.updated_at
+    `,
+      [snapshot]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("cloud-save-snapshot error", err);
+    res.status(500).json({
+      error: "CLOUD_SAVE_ERROR",
+      message: err.message,
+    });
+  }
+});
+
+// Load the latest snapshot
+app.get("/api/cloud-load-snapshot", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT snapshot, updated_at FROM pc_snapshots WHERE id = 1"
+    );
+    if (result.rows.length === 0) {
+      return res.json({ snapshot: null });
+    }
+    res.json({
+      snapshot: result.rows[0].snapshot,
+      updatedAt: result.rows[0].updated_at,
+    });
+  } catch (err) {
+    console.error("cloud-load-snapshot error", err);
+    res.status(500).json({
+      error: "CLOUD_LOAD_ERROR",
+      message: err.message,
+    });
+  }
+});
+// --- end Cloud snapshot API ---
 
 // -----------------------------------------------------------------------------
 // Static file serving (dist) + SPA fallback
