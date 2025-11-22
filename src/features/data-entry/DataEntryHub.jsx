@@ -1,20 +1,38 @@
 // src/features/data-entry/DataEntryHub.jsx
 import { useState, useEffect } from "react";
 import { loadData } from "../../utils/storage";
-import WasteEntry from "./WasteEntry"; // recipe-based waste section
+import {
+  getMasterData,
+  DEFAULT_BRANDS,
+  DEFAULT_OUTLETS,
+  DEFAULT_WASTE_REASONS,
+  DEFAULT_PETTY_CASH_CATEGORIES,
+  DEFAULT_HR_ROLES,
+} from "../../config/lookups";
 
-// Helper to generate unique IDs
+// Tabs inside Data Entry Hub
+const SECTION_TABS = [
+  { id: "sales", label: "Sales" },
+  { id: "purchases", label: "Purchases / COGS" },
+  { id: "waste", label: "Waste (Manual)" },
+  { id: "inventory", label: "Inventory / Items Master" },
+  { id: "rent-opex", label: "Rent & Opex" },
+  { id: "hr-labor", label: "HR / Labor" },
+  { id: "petty-cash", label: "Petty Cash" },
+];
+
+// Helper: generate a simple unique ID
 function makeId() {
   return Date.now().toString() + "-" + Math.random().toString(16).slice(2);
 }
 
-// LocalStorage-backed array hook
+// Helper hook: sync an array with localStorage
 function useLocalArray(key) {
   const [rows, setRows] = useState(() => loadData(key, []) || []);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(key, JSON.stringify(rows));
+      localStorage.setItem(key, JSON.stringify(rows));
     } catch (e) {
       console.error("Failed to save", key, e);
     }
@@ -23,19 +41,10 @@ function useLocalArray(key) {
   return [rows, setRows];
 }
 
-const SECTION_TABS = [
-  { id: "sales", label: "Sales" },
-  { id: "purchases", label: "Purchases / COGS" },
-  { id: "waste", label: "Waste (Manual + Recipe)" },
-  { id: "inventory", label: "Inventory / Items Master" },
-  { id: "rent-opex", label: "Rent & Opex" },
-  { id: "hr-labor", label: "HR / Labor" },
-  { id: "petty-cash", label: "Petty Cash" },
-];
-
 function DataEntryHub() {
   const [activeSection, setActiveSection] = useState("sales");
 
+  // All core datasets
   const [sales, setSales] = useLocalArray("pc_sales");
   const [purchases, setPurchases] = useLocalArray("pc_purchases");
   const [waste, setWaste] = useLocalArray("pc_waste");
@@ -43,6 +52,32 @@ function DataEntryHub() {
   const [rentOpex, setRentOpex] = useLocalArray("pc_rent_opex");
   const [hr, setHr] = useLocalArray("pc_hr_labor");
   const [pettyCash, setPettyCash] = useLocalArray("pc_petty_cash");
+
+  // Master data for dropdowns (loaded from localStorage via config/lookups.js)
+  const [brandOptions, setBrandOptions] = useState(DEFAULT_BRANDS);
+  const [outletOptions, setOutletOptions] = useState(DEFAULT_OUTLETS);
+  const [wasteReasonOptions, setWasteReasonOptions] = useState(
+    DEFAULT_WASTE_REASONS
+  );
+  const [pettyCashCategoryOptions, setPettyCashCategoryOptions] = useState(
+    DEFAULT_PETTY_CASH_CATEGORIES
+  );
+  const [hrRoleOptions, setHrRoleOptions] = useState(DEFAULT_HR_ROLES);
+
+  useEffect(() => {
+    try {
+      const master = getMasterData();
+      if (master.brands?.length) setBrandOptions(master.brands);
+      if (master.outlets?.length) setOutletOptions(master.outlets);
+      if (master.wasteReasons?.length)
+        setWasteReasonOptions(master.wasteReasons);
+      if (master.pettyCategories?.length)
+        setPettyCashCategoryOptions(master.pettyCategories);
+      if (master.hrRoles?.length) setHrRoleOptions(master.hrRoles);
+    } catch (e) {
+      console.error("Failed to load master data", e);
+    }
+  }, []);
 
   const formatNumber = (n) => {
     const x = Number(n || 0);
@@ -54,7 +89,32 @@ function DataEntryHub() {
     setRows(rows.filter((row) => row.id !== rowId));
   };
 
-  // ----------------- SALES -----------------
+  // ---------- Common dropdown renderers ----------
+  const renderBrandSelect = (value, onChange) => (
+    <select value={value || ""} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Select brand</option>
+      {brandOptions.map((b) => (
+        <option key={b} value={b}>
+          {b}
+        </option>
+      ))}
+    </select>
+  );
+
+  const renderOutletSelect = (value, onChange) => (
+    <select value={value || ""} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Select outlet</option>
+      {outletOptions.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
+  );
+
+  // ============================================================
+  // SALES
+  // ============================================================
   const addSalesRow = () => {
     setSales((prev) => [
       ...prev,
@@ -70,15 +130,6 @@ function DataEntryHub() {
   };
 
   const handleSalesChange = (rowId, field, value) => {
-    // Block negative net sales
-    if (field === "netSales") {
-      const num = Number(value);
-      if (Number.isNaN(num) || num < 0) {
-        window.alert("Net sales cannot be negative.");
-        return;
-      }
-    }
-
     setSales((prev) =>
       prev.map((row) =>
         row.id === rowId ? { ...row, [field]: value } : row
@@ -90,17 +141,16 @@ function DataEntryHub() {
     <div className="card">
       <h3 className="card-title">Sales</h3>
       <p className="page-subtitle">
-        Net sales by date, brand, and outlet. Date, brand, and outlet are
-        required. Negative sales are not allowed.
+        Net sales by date, brand, and outlet. This feeds all KPIs.
       </p>
       <div className="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Brand</th>
-              <th>Outlet</th>
-              <th>Net Sales (JOD)</th>
+              <th>Date*</th>
+              <th>Brand*</th>
+              <th>Outlet*</th>
+              <th>Net Sales (JOD)*</th>
               <th>Notes</th>
               <th></th>
             </tr>
@@ -111,92 +161,59 @@ function DataEntryHub() {
                 <td colSpan="6">No sales rows yet.</td>
               </tr>
             ) : (
-              sales.map((row) => {
-                const amount = Number(row.netSales ?? 0) || 0;
-                const missingOutlet =
-                  !row.outlet || row.outlet.toString().trim() === "";
-                const missingBrand =
-                  !row.brand || row.brand.toString().trim() === "";
-                const missingDate = !row.date;
-                const suspicious =
-                  amount > 0 && (missingOutlet || missingBrand || missingDate);
-
-                return (
-                  <tr
-                    key={row.id}
-                    style={
-                      suspicious
-                        ? { backgroundColor: "#fef3c7" } // light amber
-                        : undefined
-                    }
-                  >
-                    <td>
-                      <input
-                        type="date"
-                        required
-                        value={row.date || ""}
-                        onChange={(e) =>
-                          handleSalesChange(row.id, "date", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        required
-                        value={row.brand || ""}
-                        onChange={(e) =>
-                          handleSalesChange(row.id, "brand", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        required
-                        value={row.outlet || ""}
-                        onChange={(e) =>
-                          handleSalesChange(row.id, "outlet", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        value={row.netSales || ""}
-                        onChange={(e) =>
-                          handleSalesChange(
-                            row.id,
-                            "netSales",
-                            e.target.value
-                          )
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={row.notes || ""}
-                        onChange={(e) =>
-                          handleSalesChange(row.id, "notes", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDeleteRow(sales, setSales, row.id)
-                        }
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
+              sales.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <input
+                      type="date"
+                      value={row.date || ""}
+                      onChange={(e) =>
+                        handleSalesChange(row.id, "date", e.target.value)
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    {renderBrandSelect(row.brand, (val) =>
+                      handleSalesChange(row.id, "brand", val)
+                    )}
+                  </td>
+                  <td>
+                    {renderOutletSelect(row.outlet, (val) =>
+                      handleSalesChange(row.id, "outlet", val)
+                    )}
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={row.netSales || ""}
+                      onChange={(e) =>
+                        handleSalesChange(row.id, "netSales", e.target.value)
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.notes || ""}
+                      onChange={(e) =>
+                        handleSalesChange(row.id, "notes", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRow(sales, setSales, row.id)}
+                    >
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
@@ -212,7 +229,9 @@ function DataEntryHub() {
     </div>
   );
 
-  // ----------------- PURCHASES / COGS -----------------
+  // ============================================================
+  // PURCHASES / COGS
+  // ============================================================
   const addPurchaseRow = () => {
     setPurchases((prev) => [
       ...prev,
@@ -240,18 +259,18 @@ function DataEntryHub() {
     <div className="card">
       <h3 className="card-title">Purchases / COGS</h3>
       <p className="page-subtitle">
-        Total purchase cost for cost of goods sold (COGS). Suspicious if no
-        supplier or cost ≤ 0.
+        Total purchase cost for cost of goods sold. Linked later to supplier
+        dashboards and food cost%.
       </p>
       <div className="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Brand</th>
-              <th>Outlet</th>
-              <th>Supplier</th>
-              <th>Total Cost (JOD)</th>
+              <th>Date*</th>
+              <th>Brand*</th>
+              <th>Outlet*</th>
+              <th>Supplier*</th>
+              <th>Total Cost (JOD)*</th>
               <th>Notes</th>
               <th></th>
             </tr>
@@ -262,103 +281,75 @@ function DataEntryHub() {
                 <td colSpan="7">No purchase rows yet.</td>
               </tr>
             ) : (
-              purchases.map((row) => {
-                const amount = Number(row.totalCost ?? 0) || 0;
-                const supplierMissing =
-                  !row.supplier || row.supplier.toString().trim() === "";
-                const suspicious =
-                  supplierMissing || amount <= 0; // matches Data Health logic
-
-                return (
-                  <tr
-                    key={row.id}
-                    style={
-                      suspicious
-                        ? { backgroundColor: "#fee2e2" } // light red
-                        : undefined
-                    }
-                  >
-                    <td>
-                      <input
-                        type="date"
-                        required
-                        value={row.date || ""}
-                        onChange={(e) =>
-                          handlePurchaseChange(row.id, "date", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        required
-                        value={row.brand || ""}
-                        onChange={(e) =>
-                          handlePurchaseChange(row.id, "brand", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        required
-                        value={row.outlet || ""}
-                        onChange={(e) =>
-                          handlePurchaseChange(row.id, "outlet", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        required
-                        value={row.supplier || ""}
-                        onChange={(e) =>
-                          handlePurchaseChange(
-                            row.id,
-                            "supplier",
-                            e.target.value
-                          )
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        value={row.totalCost || ""}
-                        onChange={(e) =>
-                          handlePurchaseChange(
-                            row.id,
-                            "totalCost",
-                            e.target.value
-                          )
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={row.notes || ""}
-                        onChange={(e) =>
-                          handlePurchaseChange(row.id, "notes", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDeleteRow(purchases, setPurchases, row.id)
-                        }
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
+              purchases.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <input
+                      type="date"
+                      value={row.date || ""}
+                      onChange={(e) =>
+                        handlePurchaseChange(row.id, "date", e.target.value)
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    {renderBrandSelect(row.brand, (val) =>
+                      handlePurchaseChange(row.id, "brand", val)
+                    )}
+                  </td>
+                  <td>
+                    {renderOutletSelect(row.outlet, (val) =>
+                      handlePurchaseChange(row.id, "outlet", val)
+                    )}
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.supplier || ""}
+                      onChange={(e) =>
+                        handlePurchaseChange(row.id, "supplier", e.target.value)
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={row.totalCost || ""}
+                      onChange={(e) =>
+                        handlePurchaseChange(
+                          row.id,
+                          "totalCost",
+                          e.target.value
+                        )
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.notes || ""}
+                      onChange={(e) =>
+                        handlePurchaseChange(row.id, "notes", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDeleteRow(purchases, setPurchases, row.id)
+                      }
+                    >
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
@@ -374,13 +365,14 @@ function DataEntryHub() {
     </div>
   );
 
-  // ----------------- WASTE (MANUAL + RECIPE) -----------------
+  // ============================================================
+  // WASTE (MANUAL)
+  // ============================================================
   const addWasteRow = () => {
     setWaste((prev) => [
       ...prev,
       {
         id: makeId(),
-        wasteType: "manual",
         date: "",
         brand: "",
         outlet: "",
@@ -399,16 +391,12 @@ function DataEntryHub() {
     setWaste((prev) =>
       prev.map((row) => {
         if (row.id !== rowId) return row;
-
         const updated = { ...row, [field]: value };
 
         if (field === "qty" || field === "unitCost") {
-          const qty = Number(
-            field === "qty" ? value : updated.qty
-          ) || 0;
-          const unitCost = Number(
-            field === "unitCost" ? value : updated.unitCost
-          ) || 0;
+          const qty = Number(field === "qty" ? value : updated.qty) || 0;
+          const unitCost =
+            Number(field === "unitCost" ? value : updated.unitCost) || 0;
           updated.costValue = qty * unitCost;
         }
 
@@ -418,212 +406,153 @@ function DataEntryHub() {
   };
 
   const renderWasteSection = () => (
-    <>
-      <div className="card">
-        <h3 className="card-title">Waste (Manual Line Items)</h3>
-        <p className="page-subtitle">
-          Simple, ad hoc waste entries not linked to a full recipe. Suspicious
-          if qty = 0 but cost &gt; 0.
-        </p>
-        <div className="table-wrapper">
-          <table>
-            <thead>
+    <div className="card">
+      <h3 className="card-title">Waste (Manual Line Items)</h3>
+      <p className="page-subtitle">
+        Simple, ad hoc waste entries not linked to a full recipe. Recipe-based
+        waste is handled in Recipes & Reconciliation tabs.
+      </p>
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Date*</th>
+              <th>Brand*</th>
+              <th>Outlet*</th>
+              <th>Item*</th>
+              <th>Qty*</th>
+              <th>Unit*</th>
+              <th>Unit Cost</th>
+              <th>Cost Value</th>
+              <th>Reason</th>
+              <th>Notes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {waste.length === 0 ? (
               <tr>
-                <th>Date</th>
-                <th>Brand</th>
-                <th>Outlet</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Unit Cost</th>
-                <th>Cost Value</th>
-                <th>Reason</th>
-                <th>Notes</th>
-                <th></th>
+                <td colSpan="11">No waste rows yet.</td>
               </tr>
-            </thead>
-            <tbody>
-              {waste.filter((w) => w.wasteType !== "recipe").length === 0 ? (
-                <tr>
-                  <td colSpan="11">No manual waste rows yet.</td>
+            ) : (
+              waste.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <input
+                      type="date"
+                      value={row.date || ""}
+                      onChange={(e) =>
+                        handleWasteChange(row.id, "date", e.target.value)
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    {renderBrandSelect(row.brand, (val) =>
+                      handleWasteChange(row.id, "brand", val)
+                    )}
+                  </td>
+                  <td>
+                    {renderOutletSelect(row.outlet, (val) =>
+                      handleWasteChange(row.id, "outlet", val)
+                    )}
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.item || ""}
+                      onChange={(e) =>
+                        handleWasteChange(row.id, "item", e.target.value)
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={row.qty || ""}
+                      onChange={(e) =>
+                        handleWasteChange(row.id, "qty", e.target.value)
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.unit || ""}
+                      onChange={(e) =>
+                        handleWasteChange(row.id, "unit", e.target.value)
+                      }
+                      required
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={row.unitCost || ""}
+                      onChange={(e) =>
+                        handleWasteChange(row.id, "unitCost", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>{formatNumber(row.costValue || 0)}</td>
+                  <td>
+                    <select
+                      value={row.reason || ""}
+                      onChange={(e) =>
+                        handleWasteChange(row.id, "reason", e.target.value)
+                      }
+                    >
+                      <option value="">Select reason</option>
+                      {wasteReasonOptions.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.notes || ""}
+                      onChange={(e) =>
+                        handleWasteChange(row.id, "notes", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRow(waste, setWaste, row.id)}
+                    >
+                      ✕
+                    </button>
+                  </td>
                 </tr>
-              ) : (
-                waste
-                  .filter((w) => w.wasteType !== "recipe")
-                  .map((row) => {
-                    const qty = Number(row.qty ?? 0);
-                    const costValue = Number(row.costValue ?? 0) || 0;
-                    const suspicious =
-                      (qty === 0 || !row.qty) && costValue > 0;
-
-                    return (
-                      <tr
-                        key={row.id}
-                        style={
-                          suspicious
-                            ? { backgroundColor: "#fef9c3" } // soft yellow
-                            : undefined
-                        }
-                      >
-                        <td>
-                          <input
-                            type="date"
-                            required
-                            value={row.date || ""}
-                            onChange={(e) =>
-                              handleWasteChange(
-                                row.id,
-                                "date",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            required
-                            value={row.brand || ""}
-                            onChange={(e) =>
-                              handleWasteChange(
-                                row.id,
-                                "brand",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            required
-                            value={row.outlet || ""}
-                            onChange={(e) =>
-                              handleWasteChange(
-                                row.id,
-                                "outlet",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            required
-                            value={row.item || ""}
-                            onChange={(e) =>
-                              handleWasteChange(
-                                row.id,
-                                "item",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.001"
-                            min="0"
-                            value={row.qty || ""}
-                            onChange={(e) =>
-                              handleWasteChange(
-                                row.id,
-                                "qty",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.unit || ""}
-                            onChange={(e) =>
-                              handleWasteChange(
-                                row.id,
-                                "unit",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.001"
-                            min="0"
-                            value={row.unitCost || ""}
-                            onChange={(e) =>
-                              handleWasteChange(
-                                row.id,
-                                "unitCost",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-                        <td>{formatNumber(row.costValue || 0)}</td>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.reason || ""}
-                            onChange={(e) =>
-                              handleWasteChange(
-                                row.id,
-                                "reason",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.notes || ""}
-                            onChange={(e) =>
-                              handleWasteChange(
-                                row.id,
-                                "notes",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleDeleteRow(waste, setWaste, row.id)
-                            }
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <button
-          type="button"
-          className="primary-btn"
-          style={{ marginTop: 8 }}
-          onClick={addWasteRow}
-        >
-          + Add Manual Waste Row
-        </button>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
-
-      {/* Recipe-based waste entry (linked to recipes + inventory) */}
-      <WasteEntry />
-    </>
+      <button
+        type="button"
+        className="primary-btn"
+        style={{ marginTop: 8 }}
+        onClick={addWasteRow}
+      >
+        + Add Waste Row
+      </button>
+    </div>
   );
 
-  // ----------------- INVENTORY -----------------
+  // ============================================================
+  // INVENTORY
+  // ============================================================
   const addInventoryRow = () => {
     setInventory((prev) => [
       ...prev,
@@ -660,11 +589,11 @@ function DataEntryHub() {
         <table>
           <thead>
             <tr>
-              <th>Item Code</th>
-              <th>Item Name</th>
+              <th>Item Code*</th>
+              <th>Item Name*</th>
               <th>Brand</th>
               <th>Outlet</th>
-              <th>Unit</th>
+              <th>Unit*</th>
               <th>Current Qty</th>
               <th>Unit Cost</th>
               <th>Notes</th>
@@ -682,7 +611,6 @@ function DataEntryHub() {
                   <td>
                     <input
                       type="text"
-                      required
                       value={row.itemCode || ""}
                       onChange={(e) =>
                         handleInventoryChange(
@@ -691,12 +619,12 @@ function DataEntryHub() {
                           e.target.value
                         )
                       }
+                      required
                     />
                   </td>
                   <td>
                     <input
                       type="text"
-                      required
                       value={row.itemName || ""}
                       onChange={(e) =>
                         handleInventoryChange(
@@ -705,51 +633,34 @@ function DataEntryHub() {
                           e.target.value
                         )
                       }
+                      required
                     />
                   </td>
                   <td>
-                    <input
-                      type="text"
-                      value={row.brand || ""}
-                      onChange={(e) =>
-                        handleInventoryChange(
-                          row.id,
-                          "brand",
-                          e.target.value
-                        )
-                      }
-                    />
+                    {renderBrandSelect(row.brand, (val) =>
+                      handleInventoryChange(row.id, "brand", val)
+                    )}
                   </td>
                   <td>
-                    <input
-                      type="text"
-                      value={row.outlet || ""}
-                      onChange={(e) =>
-                        handleInventoryChange(
-                          row.id,
-                          "outlet",
-                          e.target.value
-                        )
-                      }
-                    />
+                    {renderOutletSelect(row.outlet, (val) =>
+                      handleInventoryChange(row.id, "outlet", val)
+                    )}
                   </td>
                   <td>
                     <input
                       type="text"
                       value={row.unit || ""}
                       onChange={(e) =>
-                        handleInventoryChange(
-                          row.id,
-                          "unit",
-                          e.target.value
-                        )
+                        handleInventoryChange(row.id, "unit", e.target.value)
                       }
+                      required
                     />
                   </td>
                   <td>
                     <input
                       type="number"
                       step="0.001"
+                      min="0"
                       value={row.currentQty || ""}
                       onChange={(e) =>
                         handleInventoryChange(
@@ -780,11 +691,7 @@ function DataEntryHub() {
                       type="text"
                       value={row.notes || ""}
                       onChange={(e) =>
-                        handleInventoryChange(
-                          row.id,
-                          "notes",
-                          e.target.value
-                        )
+                        handleInventoryChange(row.id, "notes", e.target.value)
                       }
                     />
                   </td>
@@ -815,7 +722,9 @@ function DataEntryHub() {
     </div>
   );
 
-  // ----------------- RENT & OPEX -----------------
+  // ============================================================
+  // RENT & OPEX
+  // ============================================================
   const addRentOpexRow = () => {
     setRentOpex((prev) => [
       ...prev,
@@ -842,16 +751,17 @@ function DataEntryHub() {
     <div className="card">
       <h3 className="card-title">Rent & Opex</h3>
       <p className="page-subtitle">
-        Operating expenses by outlet and category. Used in EBITDA.
+        Operating expenses by outlet and category. Used in EBITDA and overhead
+        analysis.
       </p>
       <div className="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Outlet</th>
-              <th>Category</th>
-              <th>Amount (JOD)</th>
+              <th>Date*</th>
+              <th>Outlet*</th>
+              <th>Category*</th>
+              <th>Amount (JOD)*</th>
               <th>Notes</th>
               <th></th>
             </tr>
@@ -867,43 +777,26 @@ function DataEntryHub() {
                   <td>
                     <input
                       type="date"
-                      required
                       value={row.date || ""}
                       onChange={(e) =>
-                        handleRentOpexChange(
-                          row.id,
-                          "date",
-                          e.target.value
-                        )
+                        handleRentOpexChange(row.id, "date", e.target.value)
                       }
+                      required
                     />
+                  </td>
+                  <td>
+                    {renderOutletSelect(row.outlet, (val) =>
+                      handleRentOpexChange(row.id, "outlet", val)
+                    )}
                   </td>
                   <td>
                     <input
                       type="text"
-                      required
-                      value={row.outlet || ""}
-                      onChange={(e) =>
-                        handleRentOpexChange(
-                          row.id,
-                          "outlet",
-                          e.target.value
-                        )
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      required
                       value={row.category || ""}
                       onChange={(e) =>
-                        handleRentOpexChange(
-                          row.id,
-                          "category",
-                          e.target.value
-                        )
+                        handleRentOpexChange(row.id, "category", e.target.value)
                       }
+                      required
                     />
                   </td>
                   <td>
@@ -913,12 +806,9 @@ function DataEntryHub() {
                       min="0"
                       value={row.amount || ""}
                       onChange={(e) =>
-                        handleRentOpexChange(
-                          row.id,
-                          "amount",
-                          e.target.value
-                        )
+                        handleRentOpexChange(row.id, "amount", e.target.value)
                       }
+                      required
                     />
                   </td>
                   <td>
@@ -926,11 +816,7 @@ function DataEntryHub() {
                       type="text"
                       value={row.notes || ""}
                       onChange={(e) =>
-                        handleRentOpexChange(
-                          row.id,
-                          "notes",
-                          e.target.value
-                        )
+                        handleRentOpexChange(row.id, "notes", e.target.value)
                       }
                     />
                   </td>
@@ -961,7 +847,9 @@ function DataEntryHub() {
     </div>
   );
 
-  // ----------------- HR / LABOR -----------------
+  // ============================================================
+  // HR / LABOR
+  // ============================================================
   const addHrRow = () => {
     setHr((prev) => [
       ...prev,
@@ -970,6 +858,7 @@ function DataEntryHub() {
         date: "",
         outlet: "",
         employee: "",
+        role: "",
         hours: "",
         laborCost: "",
         notes: "",
@@ -989,17 +878,18 @@ function DataEntryHub() {
     <div className="card">
       <h3 className="card-title">HR / Labor</h3>
       <p className="page-subtitle">
-        Labor cost per employee and outlet. Used in labor % of sales and EBITDA.
+        Labor cost per employee and outlet. Used in labour% of sales and EBITDA.
       </p>
       <div className="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Outlet</th>
-              <th>Employee</th>
+              <th>Date*</th>
+              <th>Outlet*</th>
+              <th>Employee*</th>
+              <th>Role</th>
               <th>Hours</th>
-              <th>Labor Cost (JOD)</th>
+              <th>Labor Cost (JOD)*</th>
               <th>Notes</th>
               <th></th>
             </tr>
@@ -1007,7 +897,7 @@ function DataEntryHub() {
           <tbody>
             {hr.length === 0 ? (
               <tr>
-                <td colSpan="7">No HR rows yet.</td>
+                <td colSpan="8">No HR rows yet.</td>
               </tr>
             ) : (
               hr.map((row) => (
@@ -1015,37 +905,47 @@ function DataEntryHub() {
                   <td>
                     <input
                       type="date"
-                      required
                       value={row.date || ""}
                       onChange={(e) =>
                         handleHrChange(row.id, "date", e.target.value)
                       }
+                      required
                     />
+                  </td>
+                  <td>
+                    {renderOutletSelect(row.outlet, (val) =>
+                      handleHrChange(row.id, "outlet", val)
+                    )}
                   </td>
                   <td>
                     <input
                       type="text"
-                      required
-                      value={row.outlet || ""}
-                      onChange={(e) =>
-                        handleHrChange(row.id, "outlet", e.target.value)
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      required
                       value={row.employee || ""}
                       onChange={(e) =>
                         handleHrChange(row.id, "employee", e.target.value)
                       }
+                      required
                     />
+                  </td>
+                  <td>
+                    <select
+                      value={row.role || ""}
+                      onChange={(e) =>
+                        handleHrChange(row.id, "role", e.target.value)
+                      }
+                    >
+                      <option value="">Select role</option>
+                      {hrRoleOptions.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td>
                     <input
                       type="number"
-                      step="0.001"
+                      step="0.25"
                       min="0"
                       value={row.hours || ""}
                       onChange={(e) =>
@@ -1060,12 +960,9 @@ function DataEntryHub() {
                       min="0"
                       value={row.laborCost || ""}
                       onChange={(e) =>
-                        handleHrChange(
-                          row.id,
-                          "laborCost",
-                          e.target.value
-                        )
+                        handleHrChange(row.id, "laborCost", e.target.value)
                       }
+                      required
                     />
                   </td>
                   <td>
@@ -1102,7 +999,9 @@ function DataEntryHub() {
     </div>
   );
 
-  // ----------------- PETTY CASH -----------------
+  // ============================================================
+  // PETTY CASH
+  // ============================================================
   const addPettyCashRow = () => {
     setPettyCash((prev) => [
       ...prev,
@@ -1132,18 +1031,18 @@ function DataEntryHub() {
       <h3 className="card-title">Petty Cash</h3>
       <p className="page-subtitle">
         Track small daily expenses paid from petty cash (delivery tips, small
-        supplies, quick repairs, etc.).
+        tools, quick repairs, etc.).
       </p>
       <div className="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Date</th>
+              <th>Date*</th>
               <th>Brand</th>
               <th>Outlet</th>
-              <th>Category</th>
-              <th>Description</th>
-              <th>Amount (JOD)</th>
+              <th>Category*</th>
+              <th>Description*</th>
+              <th>Amount (JOD)*</th>
               <th>Notes</th>
               <th></th>
             </tr>
@@ -1159,48 +1058,25 @@ function DataEntryHub() {
                   <td>
                     <input
                       type="date"
-                      required
                       value={row.date || ""}
                       onChange={(e) =>
-                        handlePettyCashChange(
-                          row.id,
-                          "date",
-                          e.target.value
-                        )
+                        handlePettyCashChange(row.id, "date", e.target.value)
                       }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.brand || ""}
-                      onChange={(e) =>
-                        handlePettyCashChange(
-                          row.id,
-                          "brand",
-                          e.target.value
-                        )
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
                       required
-                      value={row.outlet || ""}
-                      onChange={(e) =>
-                        handlePettyCashChange(
-                          row.id,
-                          "outlet",
-                          e.target.value
-                        )
-                      }
                     />
                   </td>
                   <td>
-                    <input
-                      type="text"
-                      required
+                    {renderBrandSelect(row.brand, (val) =>
+                      handlePettyCashChange(row.id, "brand", val)
+                    )}
+                  </td>
+                  <td>
+                    {renderOutletSelect(row.outlet, (val) =>
+                      handlePettyCashChange(row.id, "outlet", val)
+                    )}
+                  </td>
+                  <td>
+                    <select
                       value={row.category || ""}
                       onChange={(e) =>
                         handlePettyCashChange(
@@ -1209,8 +1085,15 @@ function DataEntryHub() {
                           e.target.value
                         )
                       }
-                      placeholder="Cleaning, delivery, tools..."
-                    />
+                      required
+                    >
+                      <option value="">Select category</option>
+                      {pettyCashCategoryOptions.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td>
                     <input
@@ -1223,7 +1106,7 @@ function DataEntryHub() {
                           e.target.value
                         )
                       }
-                      placeholder="Short explanation"
+                      required
                     />
                   </td>
                   <td>
@@ -1233,12 +1116,9 @@ function DataEntryHub() {
                       min="0"
                       value={row.amount || ""}
                       onChange={(e) =>
-                        handlePettyCashChange(
-                          row.id,
-                          "amount",
-                          e.target.value
-                        )
+                        handlePettyCashChange(row.id, "amount", e.target.value)
                       }
+                      required
                     />
                   </td>
                   <td>
@@ -1246,11 +1126,7 @@ function DataEntryHub() {
                       type="text"
                       value={row.notes || ""}
                       onChange={(e) =>
-                        handlePettyCashChange(
-                          row.id,
-                          "notes",
-                          e.target.value
-                        )
+                        handlePettyCashChange(row.id, "notes", e.target.value)
                       }
                     />
                   </td>
@@ -1281,7 +1157,9 @@ function DataEntryHub() {
     </div>
   );
 
-  // ----------------- SWITCH -----------------
+  // ============================================================
+  // SECTION SWITCH
+  // ============================================================
   const renderActiveSection = () => {
     switch (activeSection) {
       case "sales":
@@ -1307,9 +1185,9 @@ function DataEntryHub() {
     <div>
       <h2 className="page-title">Data Entry Hub</h2>
       <p className="page-subtitle">
-        Maintain core data for the Project Casual ecosystem. All values are
-        stored in your browser (localStorage) under the <code>pc_*</code> keys
-        used by the reporting layer.
+        Maintain core data for the Project Casual ecosystem. Values are stored
+        locally under <code>pc_*</code> keys and used by reporting, menu
+        engineering, reconciliation, and AI insights.
       </p>
 
       {/* Section tabs */}
@@ -1331,8 +1209,7 @@ function DataEntryHub() {
               padding: "6px 12px",
               borderRadius: 999,
               border: "1px solid #c7d2fe",
-              backgroundColor:
-                activeSection === tab.id ? "#e0e7ff" : "#ffffff",
+              backgroundColor: activeSection === tab.id ? "#e0e7ff" : "#ffffff",
               cursor: "pointer",
               fontSize: 13,
             }}

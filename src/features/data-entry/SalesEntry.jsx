@@ -40,17 +40,11 @@ export default function SalesEntry() {
     setRows((prev) => prev.filter((r) => r.id !== rowId));
   };
 
-  const formatNumber = (n) => {
-    const x = Number(n || 0);
-    if (Number.isNaN(x)) return "";
-    return x.toFixed(3);
-  };
-
   return (
     <div className="card">
       <h3 className="card-title">Sales</h3>
       <p className="page-subtitle">
-        Net sales by date, brand, and outlet. Uses dropdowns for consistency.
+        Net sales by date, using standardized brand and outlet dropdowns.
       </p>
 
       <div className="table-wrapper">
@@ -76,7 +70,6 @@ export default function SalesEntry() {
                   <td>
                     <input
                       type="date"
-                      required
                       value={row.date || ""}
                       onChange={(e) =>
                         handleChange(row.id, "date", e.target.value)
@@ -117,17 +110,9 @@ export default function SalesEntry() {
                     <input
                       type="number"
                       step="0.001"
-                      required
                       value={row.netSales || ""}
                       onChange={(e) =>
                         handleChange(row.id, "netSales", e.target.value)
-                      }
-                      onBlur={(e) =>
-                        handleChange(
-                          row.id,
-                          "netSales",
-                          formatNumber(e.target.value)
-                        )
                       }
                     />
                   </td>
