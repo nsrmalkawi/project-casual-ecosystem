@@ -565,3 +565,61 @@ table tbody tr:hover {
   background: #1f2937;
   transform: translateY(-1px);
 }
+
+/* --- Mobile responsiveness --- */
+@media (max-width: 900px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .app-main {
+    flex-direction: column;
+  }
+
+  .app-sidebar,
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .nav-btn {
+    flex: 1 1 45%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .app-content,
+  .main-panel {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .top-quickbar,
+  .global-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .quickbar-right {
+    text-align: left;
+  }
+
+  .filter-group {
+    min-width: 100%;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  table {
+    min-width: 640px;
+    font-size: 12px;
+  }
+}

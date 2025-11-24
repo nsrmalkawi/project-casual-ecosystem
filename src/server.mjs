@@ -1,6 +1,9 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { Pool } from "pg";
+import ExcelJS from "exceljs";
+import { stringify } from "csv-stringify/sync";
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -44,6 +47,29 @@ const FALLBACK_MODELS = [
   "gemini-1.5-flash",
   "gemini-1.5-pro",
 ];
+
+const DATABASE_URL = process.env.DATABASE_URL;
+let pool = null;
+
+if (DATABASE_URL) {
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+} else {
+  console.warn("DATABASE_URL not set; export endpoints will return 503.");
+}
+
+const EXPORTABLE_TABLES = new Set([
+  "sales",
+  "purchases",
+  "waste",
+  "recipe_waste",
+  "inventory_items",
+  "rent_opex",
+  "hr_payroll",
+  "petty_cash",
+]);
 
 async function callGemini(text) {
   if (typeof fetch !== "function") {
@@ -160,13 +186,73 @@ app.post("/api/ai-menu-actions", (req, res) => {
 
 // Basic health check to confirm server is up and envs are wired.
 app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    model: PRIMARY_MODEL,
-    fallbacks: FALLBACK_MODELS,
-    hasApiKey: !!GEMINI_API_KEY,
-    env: process.env.NODE_ENV || "development",
-  });
+  try {
+    res.json({
+      ok: true,
+      model: PRIMARY_MODEL,
+      fallbacks: FALLBACK_MODELS,
+      hasApiKey: !!GEMINI_API_KEY,
+      hasDatabase: !!pool,
+      env: process.env.NODE_ENV || "development",
+    });
+  } catch (err) {
+    console.error("Health endpoint error:", err);
+    res.status(500).json({ error: "HEALTH_FAILED", message: err.message });
+  }
+});
+
+// Export endpoints (CSV & XLSX)
+
+app.get("/api/export/:table", async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const table = req.params.table;
+  if (!EXPORTABLE_TABLES.has(table)) {
+    return res.status(400).json({ error: "INVALID_TABLE" });
+  }
+
+  try {
+    const { rows } = await pool.query(`SELECT * FROM ${table} ORDER BY date DESC NULLS LAST`);
+    const csv = stringify(rows, { header: true });
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename=${table}.csv`);
+    res.send(csv);
+  } catch (err) {
+    console.error("CSV export error:", err);
+    res.status(500).json({ error: "EXPORT_FAILED", message: err.message });
+  }
+});
+
+app.get("/api/export-xlsx/:table", async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const table = req.params.table;
+  if (!EXPORTABLE_TABLES.has(table)) {
+    return res.status(400).json({ error: "INVALID_TABLE" });
+  }
+
+  try {
+    const { rows, fields } = await pool.query(`SELECT * FROM ${table} ORDER BY date DESC NULLS LAST`);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(table);
+    ws.columns = fields.map((f) => ({ header: f.name, key: f.name }));
+    rows.forEach((r) => ws.addRow(r));
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename=${table}.xlsx`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("XLSX export error:", err);
+    res.status(500).json({ error: "EXPORT_FAILED", message: err.message });
+  }
 });
 
 app.listen(port, () => {

@@ -62,8 +62,13 @@ export function applyAllPcLocalData(data) {
 
 // Save to server-side "cloud" snapshot
 export async function saveSnapshotToCloud() {
+  const API_BASE = import.meta.env.VITE_API_BASE || "";
+  const url = API_BASE
+    ? `${API_BASE}/api/snapshot`.replace(/([^:]\/)\/+/g, "$1")
+    : "/api/snapshot";
+
   const payload = getAllPcLocalData();
-  const res = await fetch("/api/snapshot", {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ data: payload }),
@@ -76,7 +81,12 @@ export async function saveSnapshotToCloud() {
 
 // Load from server-side "cloud" snapshot
 export async function loadSnapshotFromCloud() {
-  const res = await fetch("/api/snapshot");
+  const API_BASE = import.meta.env.VITE_API_BASE || "";
+  const url = API_BASE
+    ? `${API_BASE}/api/snapshot`.replace(/([^:]\/)\/+/g, "$1")
+    : "/api/snapshot";
+
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Snapshot load failed: ${res.status}`);
   }

@@ -1,8 +1,11 @@
 // src/utils/aiClient.js
 
-// In production, set VITE_AI_SERVER_URL to your deployed server base URL.
+// In production, set VITE_API_BASE (or legacy VITE_AI_SERVER_URL) to your deployed server base URL.
 // Locally, this falls back to the Vite dev server proxy target.
-const API_BASE = import.meta.env.VITE_AI_SERVER_URL || "";
+const API_BASE =
+  import.meta.env.VITE_AI_SERVER_URL ||
+  import.meta.env.VITE_API_BASE ||
+  "";
 
 /**
  * Generic AI call helper.
