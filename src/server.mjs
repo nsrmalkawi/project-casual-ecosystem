@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import { Pool } from "pg";
 import ExcelJS from "exceljs";
 import { stringify } from "csv-stringify/sync";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -253,6 +255,16 @@ app.get("/api/export-xlsx/:table", async (req, res) => {
     console.error("XLSX export error:", err);
     res.status(500).json({ error: "EXPORT_FAILED", message: err.message });
   }
+});
+
+// --- Serve built frontend (dist) for single-service deploys ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = path.join(__dirname, "../dist");
+
+app.use(express.static(distPath));
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
 });
 
 app.listen(port, () => {
