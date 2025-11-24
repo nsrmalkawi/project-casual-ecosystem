@@ -31,7 +31,16 @@ export default defineConfig({
       },
     }),
   ],
+  base: './',
   server: {
     port: 5173,
+    proxy: {
+      // Proxy API requests to the backend server
+      "/api": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 });

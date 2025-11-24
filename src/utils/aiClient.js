@@ -1,108 +1,54 @@
 // src/utils/aiClient.js
-//
-// Small helper to call your backend AI endpoints from the React app.
-// All AI calls go to the Node server (same origin) which talks to Gemini.
 
-const API_BASE = ""; // same-origin; no need to change
+// In production, set VITE_AI_SERVER_URL to your deployed server base URL.
+// Locally, this falls back to the Vite dev server proxy target.
+const API_BASE = import.meta.env.VITE_AI_SERVER_URL || "";
 
-async function callAIEndpoint(path, payload) {
-  try {
-    const resp = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload || {}),
-    });
-
-    if (!resp.ok) {
-      let text = "";
-      try {
-        text = await resp.text();
-      } catch {
-        // ignore
-      }
-      throw new Error(
-        `AI request failed: ${resp.status} ${
-          resp.statusText || ""
-        } - ${text}`
-      );
-    }
-
-    const data = await resp.json();
-    return data;
-  } catch (err) {
-    console.error("AI endpoint error:", err);
-    // Re-throw for the UI to handle and show friendly messages
-    throw err;
+/**
+ * Generic AI call helper.
+ * @param {Object} params
+ * @param {string} params.mode - e.g. "summary", "anomaly", "actionPlan", "menuActions", "cashflowExplain", "free"
+ * @param {Object} params.payload - JSON with metrics / data snapshot
+ * @param {string} [params.question] - Optional free-form question
+ */
+export async function callAi({ mode, payload, question }) {
+  if (!payload) {
+    throw new Error("callAi requires a payload object.");
   }
+
+  // Map the client-side mode to a server endpoint.
+  const endpointMap = {
+    menuActions: "ai-menu-actions",
+    explanation: "ai-explanation",
+    report: "ai-report",
+    anomaly: "ai-report",
+    actionPlan: "ai-report",
+    qa: "ai-report",
+    scenario: "ai-report",
+  };
+
+  const url = `${API_BASE}/api/${endpointMap[mode] || "ai-report"}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      payload,
+      question,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `AI request failed: ${res.status} ${res.statusText} - ${text}`
+    );
+  }
+
+  const data = await res.json();
+  // Normalize shape for older callers that expected { message }
+  const text = data.text || data.message || "";
+  return { ...data, text };
 }
-
-/**
- * Backwards-compatible helper used by older code:
- * callAi("/api/ai-report", payload) etc.
- */
-export async function callAi(path, payload) {
-  return callAIEndpoint(path, payload);
-}
-
-/**
- * Generate an AI narrative report for the overall ecosystem.
- * Used in ReportsHub (Generate AI Report).
- */
-export async function fetchAIReport(payload) {
-  // expected payload shape:
-  // {
-  //   metricsSummary,
-  //   filters,
-  //   periodLabel,
-  //   outlet,
-  //   brand
-  // }
-  const data = await callAIEndpoint("/api/ai-report", payload);
-  // server returns { reportText }
-  return data;
-}
-
-/**
- * Ask AI for menu engineering / actions suggestions.
- * Used in MenuEngineeringHub.
- */
-export async function fetchAIMenuActions(payload) {
-  // expected payload shape:
-  // {
-  //   menuItems, // array of { name, popularity, margin, category, ... }
-  //   context   // { brand, outlet, periodLabel, ... }
-  // }
-  const data = await callAIEndpoint("/api/ai-menu-actions", payload);
-  // server returns { actions: [...] }
-  return data;
-}
-
-/**
- * Ask AI to explain a specific anomaly, variance or KPI issue.
- * Used in ReportsHub "Explain with AI" / anomaly helper.
- */
-export async function fetchAIExplanation(payload) {
-  // expected payload shape:
-  // {
-  //   metricKey,
-  //   metricLabel,
-  //   details,      // any extra numbers / context
-  //   filters,
-  //   periodLabel
-  // }
-  const data = await callAIEndpoint("/api/ai-explanation", payload);
-  // server returns { explanation }
-  return data;
-}
-
-// Optional default export if any file uses `import aiClient from ...`
-const aiClient = {
-  callAi,
-  fetchAIReport,
-  fetchAIMenuActions,
-  fetchAIExplanation,
-};
-
-export default aiClient;

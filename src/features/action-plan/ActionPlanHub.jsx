@@ -150,6 +150,10 @@ function ActionPlanHub() {
     if (draft.id === id) resetDraft();
   }
 
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [priorityFilter, setPriorityFilter] = useState("All");
+  const [showOverdue, setShowOverdue] = useState(false);
+
   async function handleAiSuggestActions() {
     try {
       setAiLoading(true);
@@ -186,9 +190,7 @@ function ActionPlanHub() {
       setAiSuggestions(res.text || "");
     } catch (err) {
       setAiSuggestions(
-        `Failed to get AI action ideas: ${
-          err.message || "Unknown error"
-        }`
+        `Failed to get AI action ideas: ${err.message || "Unknown error"}`
       );
     } finally {
       setAiLoading(false);
@@ -491,6 +493,41 @@ function ActionPlanHub() {
             <h3 className="card-title">
               Action List
             </h3>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+                marginBottom: 8,
+              }}
+            >
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="All">All status</option>
+                <option value="Planned">Planned</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Done">Done</option>
+              </select>
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+              >
+                <option value="All">All priority</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <input
+                  type="checkbox"
+                  checked={showOverdue}
+                  onChange={(e) => setShowOverdue(e.target.checked)}
+                />
+                Overdue only
+              </label>
+            </div>
             <div className="table-wrapper">
               <table>
                 <thead>
@@ -506,7 +543,24 @@ function ActionPlanHub() {
                   </tr>
                 </thead>
                 <tbody>
-                  {actions.length === 0 ? (
+                  {actions
+                    .filter((a) => {
+                      const statusOk =
+                        statusFilter === "All" ||
+                        a.status === statusFilter;
+                      const priorityOk =
+                        priorityFilter === "All" ||
+                        a.priority === priorityFilter;
+                      const overdueOk =
+                        !showOverdue ||
+                        (a.dueDate &&
+                          a.dueDate < todayStr &&
+                          a.status !== "Done");
+                      return statusOk && priorityOk && overdueOk;
+                    })
+                    .sort((a, b) =>
+                      (a.dueDate || "").localeCompare(b.dueDate || "")
+                    ).length === 0 ? (
                     <tr>
                       <td colSpan="8">
                         No actions yet. Use the form above
@@ -514,7 +568,25 @@ function ActionPlanHub() {
                       </td>
                     </tr>
                   ) : (
-                    actions.map((a) => {
+                    actions
+                      .filter((a) => {
+                        const statusOk =
+                          statusFilter === "All" ||
+                          a.status === statusFilter;
+                        const priorityOk =
+                          priorityFilter === "All" ||
+                          a.priority === priorityFilter;
+                        const overdueOk =
+                          !showOverdue ||
+                          (a.dueDate &&
+                            a.dueDate < todayStr &&
+                            a.status !== "Done");
+                        return statusOk && priorityOk && overdueOk;
+                      })
+                      .sort((a, b) =>
+                        (a.dueDate || "").localeCompare(b.dueDate || "")
+                      )
+                      .map((a) => {
                       const overdue =
                         a.dueDate &&
                         a.dueDate < todayStr &&
@@ -531,7 +603,24 @@ function ActionPlanHub() {
                           </td>
                           <td>{a.owner}</td>
                           <td>{a.status}</td>
-                          <td>{a.priority}</td>
+                          <td>
+                            <span
+                              style={{
+                                backgroundColor:
+                                  a.priority === "High"
+                                    ? "#fecdd3"
+                                    : a.priority === "Medium"
+                                    ? "#fef9c3"
+                                    : "#e0f2fe",
+                                color: "#0f172a",
+                                padding: "2px 6px",
+                                borderRadius: 6,
+                                fontWeight: 600,
+                              }}
+                            >
+                              {a.priority}
+                            </span>
+                          </td>
                           <td
                             style={{
                               color: overdue

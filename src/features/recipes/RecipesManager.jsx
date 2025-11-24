@@ -38,6 +38,24 @@ function RecipesManager() {
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState({ ...emptyRecipe, ingredients: [] });
 
+  const brandOptions = useMemo(() => {
+    const set = new Set();
+    recipes.forEach((r) => r.brand && set.add(r.brand));
+    return Array.from(set).sort();
+  }, [recipes]);
+
+  const outletOptions = useMemo(() => {
+    const set = new Set();
+    recipes.forEach((r) => r.outlet && set.add(r.outlet));
+    return Array.from(set).sort();
+  }, [recipes]);
+
+  const categoryOptions = useMemo(() => {
+    const set = new Set();
+    recipes.forEach((r) => r.category && set.add(r.category));
+    return Array.from(set).sort();
+  }, [recipes]);
+
   // When selectedId changes, load that recipe into draft
   useEffect(() => {
     if (!selectedId) {
@@ -63,6 +81,12 @@ function RecipesManager() {
     const sell = Number(draft.sellPrice) || 0;
     return sell - costPerPortion;
   }, [draft.sellPrice, costPerPortion]);
+
+  const marginPct = useMemo(() => {
+    const sell = Number(draft.sellPrice) || 0;
+    if (!sell) return 0;
+    return (grossMarginPerPortion / sell) * 100;
+  }, [grossMarginPerPortion, draft.sellPrice]);
 
   // --------- Handlers ---------
 
@@ -103,6 +127,11 @@ function RecipesManager() {
   const handleSave = () => {
     if (!draft.name.trim()) {
       alert("Recipe name is required.");
+      return;
+    }
+    const sell = Number(draft.sellPrice) || 0;
+    if (sell < 0) {
+      alert("Selling price must be zero or positive.");
       return;
     }
 
@@ -214,6 +243,7 @@ function RecipesManager() {
               type="text"
               value={draft.name}
               onChange={(e) => handleFieldChange("name", e.target.value)}
+              required
             />
           </div>
 
@@ -221,8 +251,10 @@ function RecipesManager() {
             <label>Brand</label>
             <input
               type="text"
+              list="brand-options"
               value={draft.brand}
               onChange={(e) => handleFieldChange("brand", e.target.value)}
+              placeholder="Select or type a brand"
             />
           </div>
 
@@ -230,8 +262,10 @@ function RecipesManager() {
             <label>Outlet</label>
             <input
               type="text"
+              list="outlet-options"
               value={draft.outlet}
               onChange={(e) => handleFieldChange("outlet", e.target.value)}
+              placeholder="Select or type an outlet"
             />
           </div>
 
@@ -239,8 +273,10 @@ function RecipesManager() {
             <label>Category</label>
             <input
               type="text"
+              list="category-options"
               value={draft.category}
               onChange={(e) => handleFieldChange("category", e.target.value)}
+              placeholder="Select or type a category"
             />
           </div>
 
@@ -264,6 +300,7 @@ function RecipesManager() {
               onChange={(e) =>
                 handleFieldChange("sellPrice", e.target.value)
               }
+              min="0"
             />
           </div>
 
@@ -274,7 +311,36 @@ function RecipesManager() {
 
           <div className="form-field">
             <label>Gross Margin per Portion (auto)</label>
-            <div>{formatNumber(grossMarginPerPortion)} JOD</div>
+            <div>
+              {formatNumber(grossMarginPerPortion)} JOD (
+              {marginPct.toFixed(1)}%)
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="card"
+          style={{
+            marginTop: 10,
+            background: "#0f172a",
+            color: "#e5e7eb",
+          }}
+        >
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <div className="field-label" style={{ color: "#cbd5e1" }}>
+                Cost / Portion
+              </div>
+              <div style={{ fontWeight: 700 }}>{formatNumber(costPerPortion)} JOD</div>
+            </div>
+            <div>
+              <div className="field-label" style={{ color: "#cbd5e1" }}>
+                Margin / Portion
+              </div>
+              <div style={{ fontWeight: 700 }}>
+                {formatNumber(grossMarginPerPortion)} JOD ({marginPct.toFixed(1)}%)
+              </div>
+            </div>
           </div>
         </div>
 
@@ -380,7 +446,7 @@ function RecipesManager() {
                           type="button"
                           onClick={() => handleRemoveIngredient(ing.id)}
                         >
-                          ✕
+                          X
                         </button>
                       </td>
                     </tr>
@@ -414,9 +480,28 @@ function RecipesManager() {
             </button>
           )}
         </div>
+
+        <datalist id="brand-options">
+          {brandOptions.map((b) => (
+            <option key={b} value={b} />
+          ))}
+        </datalist>
+        <datalist id="outlet-options">
+          {outletOptions.map((o) => (
+            <option key={o} value={o} />
+          ))}
+        </datalist>
+        <datalist id="category-options">
+          {categoryOptions.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
       </div>
     </div>
   );
 }
 
 export default RecipesManager;
+
+
+

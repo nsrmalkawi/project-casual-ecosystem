@@ -1,5 +1,6 @@
 // src/features/reports/ReportsHub.jsx
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
+import { marked } from "marked";
 import {
   BarChart,
   Bar,
@@ -15,6 +16,7 @@ import {
 import { loadData } from "../../utils/storage";
 import AlertsSummaryBox from "./AlertsSummaryBox";
 import { callAi } from "../../utils/aiClient";
+import { useData } from "../../DataContext";
 
 function safeNumber(v) {
   const n = Number(v);
@@ -24,6 +26,41 @@ function safeNumber(v) {
 function percent(n) {
   if (!Number.isFinite(n)) return "0.0%";
   return (n * 100).toFixed(1) + "%";
+}
+
+function renderMarkdown(md) {
+  if (!md) return "";
+  marked.setOptions({
+    mangle: false,
+    headerIds: false,
+  });
+  return marked.parse(md);
+}
+
+function printHtml(html) {
+  const printWindow = window.open("", "_blank", "width=900,height=1200");
+  if (!printWindow) return;
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>AI Report</title>
+        <style>
+          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; padding: 16px; color: #0f172a; }
+          h2, h3, h4 { margin: 6px 0; }
+          .section { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: #f8fafc; }
+          pre { white-space: pre-wrap; margin: 0; font-size: 13px; line-height: 1.4; }
+        </style>
+      </head>
+      <body>
+        <h2>AI Report</h2>
+        ${html}
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+  printWindow.close();
 }
 
 function ReportsHub() {
@@ -36,11 +73,17 @@ function ReportsHub() {
   const [hr] = useState(() => loadData("pc_hr_labor", []) || []);
   const [pettyCash] = useState(() => loadData("pc_petty_cash", []) || []);
 
-  // --------- Filters ---------
-  const [brandFilter, setBrandFilter] = useState("");
-  const [outletFilter, setOutletFilter] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  // --------- Filters (global) ---------
+  const {
+    brandFilter,
+    setBrandFilter,
+    outletFilter,
+    setOutletFilter,
+    startDate,
+    setStartDate,
+    endDate,
+    setEndDate,
+  } = useData();
 
   const allBrands = useMemo(() => {
     const set = new Set();
@@ -290,18 +333,18 @@ function ReportsHub() {
       bucket.petty += safeNumber(r.amount);
     });
 
-    const arr = Array.from(map.values()).map((b) => {
-      const totalCost = b.foodCost + b.labor + b.rent + b.petty;
-      const ebitda = b.sales - totalCost;
-      return {
-        date: b.date,
-        sales: b.sales,
-        ebitda,
-      };
-    });
+  const arr = Array.from(map.values()).map((b) => {
+    const totalCost = b.foodCost + b.labor + b.rent + b.petty;
+    const ebitda = b.sales - totalCost;
+    return {
+      date: b.date,
+      sales: b.sales,
+      ebitda,
+    };
+  });
 
-    // Sort by date string (YYYY-MM-DD works lexicographically)
-    return arr.sort((a, b) => a.date.localeCompare(b.date));
+  // Sort by date string (YYYY-MM-DD works lexicographically)
+  return arr.sort((a, b) => a.date.localeCompare(b.date));
   }, [
     filteredSales,
     filteredPurchases,
@@ -310,6 +353,16 @@ function ReportsHub() {
     filteredRentOpex,
     filteredPettyCash,
   ]);
+
+  const topBottomOutlets = useMemo(() => {
+    const sorted = [...ebitdaByOutlet].sort(
+      (a, b) => (b.ebitdaMargin || 0) - (a.ebitdaMargin || 0)
+    );
+    return {
+      top: sorted.slice(0, 3),
+      bottom: sorted.slice(-3).reverse(),
+    };
+  }, [ebitdaByOutlet]);
 
   // --------- Simple automatic alerts (Data-driven) ---------
   const triggeredAlerts = useMemo(() => {
@@ -356,6 +409,8 @@ function ReportsHub() {
   const [aiError, setAiError] = useState(null);
   const [aiAnomalyText, setAiAnomalyText] = useState("");
   const [aiActionText, setAiActionText] = useState("");
+  const aiReportRef = useRef(null);
+  const [resModel, setResModel] = useState(null);
 
   const aiPayload = useMemo(
     () => ({
@@ -396,6 +451,40 @@ function ReportsHub() {
     ]
   );
 
+  function handleExportPdf() {
+    if (!aiReportRef.current) return;
+    printHtml(aiReportRef.current.innerHTML);
+  }
+
+  function getReportText() {
+    return [aiAnomalyText, aiActionText].filter(Boolean).join("\n\n");
+  }
+
+  async function handleCopyText() {
+    const text = getReportText();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("AI report copied to clipboard.");
+    } catch (err) {
+      console.error("Copy failed", err);
+    }
+  }
+
+  function handleDownloadMd() {
+    const text = getReportText();
+    if (!text) return;
+    const blob = new Blob([text], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ai-report.md";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleRunAnomalyScan() {
     if (!aiPayload) return;
     setAiError(null);
@@ -406,6 +495,7 @@ function ReportsHub() {
         payload: aiPayload,
       });
       setAiAnomalyText(res.text || "");
+      setResModel(res.model || null);
       setAiAnomalyStatus("done");
     } catch (err) {
       console.error("AI anomaly error:", err);
@@ -424,6 +514,7 @@ function ReportsHub() {
         payload: aiPayload,
       });
       setAiActionText(res.text || "");
+      setResModel(res.model || null);
       setAiActionStatus("done");
     } catch (err) {
       console.error("AI action suggestions error:", err);
@@ -590,97 +681,166 @@ function ReportsHub() {
               ? "Generating actions..."
               : "AI action plan suggestions"}
           </button>
+
+          <button
+            type="button"
+            className="secondary-btn"
+            onClick={handleExportPdf}
+            disabled={!aiAnomalyText && !aiActionText}
+          >
+            Export AI report (PDF)
+          </button>
+
+          <button
+            type="button"
+            className="secondary-btn"
+            onClick={handleCopyText}
+            disabled={!aiAnomalyText && !aiActionText}
+          >
+            Copy as text
+          </button>
+
+          <button
+            type="button"
+            className="secondary-btn"
+            onClick={handleDownloadMd}
+            disabled={!aiAnomalyText && !aiActionText}
+          >
+            Download .md
+          </button>
         </div>
 
-        {aiError && (
-          <div
-            style={{
-              color: "#b91c1c",
-              fontSize: 13,
-              marginBottom: 8,
-            }}
-          >
-            {aiError}
-          </div>
-        )}
-
-        {aiAnomalyText && (
-          <div style={{ marginBottom: 8 }}>
-            <h4
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              Anomalies & red flags
-            </h4>
+        <div ref={aiReportRef}>
+          {aiError && (
             <div
-              className="ai-output-box"
               style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                padding: 8,
-                maxHeight: 220,
-                overflowY: "auto",
-                backgroundColor: "#f9fafb",
+                color: "#b91c1c",
+                fontSize: 13,
+                marginBottom: 8,
               }}
             >
-              <pre
+              {aiError}
+            </div>
+          )}
+
+          {aiAnomalyText && (
+            <details open style={{ marginBottom: 8 }} className="section">
+              <summary
                 style={{
-                  whiteSpace: "pre-wrap",
-                  fontSize: 13,
-                  margin: 0,
-                  fontFamily:
-                    "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  marginBottom: 4,
+                  color: "#0f172a",
+                  cursor: "pointer",
                 }}
               >
-                {aiAnomalyText}
-              </pre>
-            </div>
-          </div>
-        )}
-
-        {aiActionText && (
-          <div>
-            <h4
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              Suggested action plan
-            </h4>
-            <div
-              className="ai-output-box"
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                padding: 8,
-                maxHeight: 260,
-                overflowY: "auto",
-                backgroundColor: "#f9fafb",
-              }}
-            >
-              <pre
+                Anomalies & red flags
+              </summary>
+              <div
+                className="ai-output-box"
                 style={{
-                  whiteSpace: "pre-wrap",
-                  fontSize: 13,
-                  margin: 0,
-                  fontFamily:
-                    "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  padding: 8,
+                  maxHeight: 220,
+                  overflowY: "auto",
+                  backgroundColor: "#eef2ff",
+                }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(aiAnomalyText) }}
+              />
+              {resModel && (
+                <div style={{ fontSize: 11, color: "#475569", marginTop: 4 }}>
+                  Generated by {resModel}
+                </div>
+              )}
+            </details>
+          )}
+
+          {aiActionText && (
+            <details open className="section">
+              <summary
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  marginBottom: 4,
+                  color: "#0f172a",
+                  cursor: "pointer",
                 }}
               >
-                {aiActionText}
-              </pre>
-            </div>
-          </div>
-        )}
+                Suggested action plan
+              </summary>
+              <div
+                className="ai-output-box"
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  padding: 8,
+                  maxHeight: 260,
+                  overflowY: "auto",
+                  backgroundColor: "#f1f5f9",
+                }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(aiActionText) }}
+              />
+              {resModel && (
+                <div style={{ fontSize: 11, color: "#475569", marginTop: 4 }}>
+                  Generated by {resModel}
+                </div>
+              )}
+            </details>
+          )}
+        </div>
       </div>
 
       {/* Alerts summary (simple auto alerts) */}
       <AlertsSummaryBox triggeredAlerts={triggeredAlerts} />
+
+      {/* Outlet comparison mini-cards */}
+      {ebitdaByOutlet.length > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 12,
+            marginTop: 12,
+            marginBottom: 12,
+          }}
+        >
+          {topBottomOutlets.top.map((row) => (
+            <div
+              key={`top-${row.outlet}`}
+              className="card"
+              style={{ borderLeft: "4px solid #16a34a" }}
+            >
+              <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 700 }}>
+                Top EBITDA%
+              </div>
+              <div style={{ fontWeight: 700 }}>{row.outlet}</div>
+              <div style={{ fontSize: 12, color: "#475569" }}>{row.brand}</div>
+              <div style={{ fontSize: 13, marginTop: 4 }}>
+                EBITDA%: {percent(row.ebitdaMargin)} | Sales:{" "}
+                {row.totalSales.toFixed(1)}
+              </div>
+            </div>
+          ))}
+          {topBottomOutlets.bottom.map((row) => (
+            <div
+              key={`bot-${row.outlet}`}
+              className="card"
+              style={{ borderLeft: "4px solid #dc2626" }}
+            >
+              <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
+                Bottom EBITDA%
+              </div>
+              <div style={{ fontWeight: 700 }}>{row.outlet}</div>
+              <div style={{ fontSize: 12, color: "#475569" }}>{row.brand}</div>
+              <div style={{ fontSize: 13, marginTop: 4 }}>
+                EBITDA%: {percent(row.ebitdaMargin)} | Sales:{" "}
+                {row.totalSales.toFixed(1)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Charts row */}
       <div
@@ -700,8 +860,13 @@ function ReportsHub() {
               <LineChart data={timeSeries}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
+                <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip
+                  formatter={(value, name) => {
+                    const label = name.includes("EBITDA") ? "EBITDA" : "Sales";
+                    return [`${Number(value).toFixed(0)} JOD`, label];
+                  }}
+                />
                 <Legend />
                 <Line
                   type="monotone"
@@ -730,13 +895,17 @@ function ReportsHub() {
               <BarChart data={ebitdaByOutlet}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="outlet" />
-                <YAxis />
-                <Tooltip />
+                <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip
+                  formatter={(value, name) => {
+                    return [`${Number(value).toFixed(0)} JOD`, name];
+                  }}
+                />
                 <Legend />
-                <Bar dataKey="totalSales" name="Sales" />
-                <Bar dataKey="totalFoodCost" name="Food cost" />
-                <Bar dataKey="totalLaborCost" name="Labor" />
-                <Bar dataKey="ebitda" name="EBITDA" />
+                <Bar dataKey="totalSales" name="Sales" fill="#4f46e5" />
+                <Bar dataKey="totalFoodCost" name="Food cost" fill="#f97316" />
+                <Bar dataKey="totalLaborCost" name="Labor" fill="#0ea5e9" />
+                <Bar dataKey="ebitda" name="EBITDA" fill="#16a34a" />
               </BarChart>
             </ResponsiveContainer>
           </div>

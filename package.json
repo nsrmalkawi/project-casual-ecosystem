@@ -4,21 +4,20 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"npm run start-server\" \"npm run start-client\"",
+    "start-client": "vite",
+    "start-server": "nodemon src/server.mjs",
     "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "server": "node src/server.mjs"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@google-cloud/notebooks": "^4.2.1",
     "@google-cloud/vertexai": "^1.10.0",
-    "@google/generative-ai": "^0.24.1",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "pg": "^8.16.3",
+    "marked": "^12.0.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.4.1"
@@ -29,10 +28,12 @@
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
     "@vitejs/plugin-react-swc": "^4.2.2",
+    "concurrently": "^9.2.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "nodemon": "^3.1.11",
     "vite": "npm:rolldown-vite@7.2.2",
     "vite-plugin-pwa": "^1.1.0"
   },

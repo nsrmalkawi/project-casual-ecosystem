@@ -1,5 +1,6 @@
 // src/features/menu-engineering/MenuEngineeringHub.jsx
 import { useEffect, useMemo, useState } from "react";
+import { marked } from "marked";
 import {
   CartesianGrid,
   Legend,
@@ -11,20 +12,33 @@ import {
   YAxis,
 } from "recharts";
 import { callAi } from "../../utils/aiClient";
+import { useData } from "../../DataContext";
+
+const STORAGE_KEYS = ["pc_menu_items", "pc_recipes"];
+
+const CLASS_COLORS = {
+  Star: "#0ea5e9",
+  Plowhorse: "#22c55e",
+  Puzzle: "#f59e0b",
+  Dog: "#ef4444",
+  Unclassified: "#94a3b8",
+};
 
 function loadMenuItems() {
-  const keys = ["pc_menu_items", "pc_recipes"];
-  for (const key of keys) {
+  const collected = [];
+  for (const key of STORAGE_KEYS) {
     try {
       const raw = window.localStorage.getItem(key);
       if (!raw) continue;
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        collected.push(...parsed);
+      }
     } catch {
-      // ignore
+      // ignore bad JSON and keep going
     }
   }
-  return [];
+  return collected;
 }
 
 function mapMenuItems(rawItems) {
@@ -154,18 +168,34 @@ function MenuEngineeringHub() {
     useState(false);
   const [aiActionsLoading, setAiActionsLoading] =
     useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState("");
 
-  const [brandFilter, setBrandFilter] = useState("All");
-  const [outletFilter, setOutletFilter] = useState("All");
+  const {
+    brandFilter = "",
+    setBrandFilter,
+    outletFilter = "",
+    setOutletFilter,
+  } = useData();
 
   useEffect(() => {
     setRawItems(loadMenuItems());
+    setLastRefreshed(new Date().toLocaleString());
   }, []);
 
   const items = useMemo(
     () => classifyItems(mapMenuItems(rawItems)),
     [rawItems]
   );
+
+  const groupedByClass = useMemo(() => {
+    const groups = {};
+    items.forEach((i) => {
+      const key = i.classification || "Unclassified";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(i);
+    });
+    return groups;
+  }, [items]);
 
   const brandOptions = useMemo(() => {
     const set = new Set();
@@ -186,11 +216,11 @@ function MenuEngineeringHub() {
   const filteredItems = useMemo(() => {
     return items.filter((i) => {
       const bOk =
-        brandFilter === "All" ||
-        String(i.brand) === brandFilter;
+        !brandFilter ||
+        String(i.brand).toLowerCase() === brandFilter.toLowerCase();
       const oOk =
-        outletFilter === "All" ||
-        String(i.outlet) === outletFilter;
+        !outletFilter ||
+        String(i.outlet).toLowerCase() === outletFilter.toLowerCase();
       return bOk && oOk;
     });
   }, [items, brandFilter, outletFilter]);
@@ -244,16 +274,16 @@ function MenuEngineeringHub() {
       };
 
       const res = await callAi({
-        mode: "viewExplain",
+        mode: "explanation",
         payload,
+        question:
+          "Return markdown with sections: ## Menu snapshot, ## What it means (3 bullets), ## Risks (2 bullets), ## Actions (5 short bullets).",
       });
 
       setAiExplainText(res.text || "");
     } catch (err) {
       setAiExplainText(
-        `Failed to get AI explanation: ${
-          err.message || "Unknown error"
-        }`
+        `Failed to get AI explanation: ${err.message || "Unknown error"}`
       );
     } finally {
       setAiExplainLoading(false);
@@ -282,16 +312,16 @@ function MenuEngineeringHub() {
       };
 
       const res = await callAi({
-        mode: "viewExplain",
+        mode: "menuActions",
         payload,
+        question:
+          "Return markdown with sections: ## Promote (top items), ## Fix/Remove (weak items), and a table Item | Class | Price | Cost | Margin% | Action.",
       });
 
       setAiActionsText(res.text || "");
     } catch (err) {
       setAiActionsText(
-        `Failed to get AI menu actions: ${
-          err.message || "Unknown error"
-        }`
+        `Failed to get AI menu actions:xxxxx ${err.message || "Unknown error"}`
       );
     } finally {
       setAiActionsLoading(false);
@@ -303,9 +333,29 @@ function MenuEngineeringHub() {
       <h2 className="page-title">Menu Engineering</h2>
       <p className="page-subtitle">
         Classify items as Stars, Plowhorses, Puzzles, and Dogs
-        based on margin and popularity. Use AI to interpret and
-        suggest actions.
+        based on margin and popularity. Data is pulled from your
+        saved Menu Items and Recipes (cost/price/yield) in local
+        storage. Use AI to interpret and suggest actions.
       </p>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+        <span
+          style={{
+            padding: "4px 8px",
+            borderRadius: 8,
+            background: "#e0f2fe",
+            color: "#0f172a",
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          Data source: Menu Items + Recipes
+        </span>
+        {lastRefreshed && (
+          <span style={{ fontSize: 12, color: "#475569" }}>
+            Last refreshed: {lastRefreshed}
+          </span>
+        )}
+      </div>
 
       {/* Filters */}
       <div
@@ -320,11 +370,11 @@ function MenuEngineeringHub() {
         <div>
           <label className="field-label">Brand</label>
           <select
-            value={brandFilter}
+            value={brandFilter || ""}
             onChange={(e) => setBrandFilter(e.target.value)}
           >
             {brandOptions.map((b) => (
-              <option key={b} value={b}>
+              <option key={b} value={b === "All" ? "" : b}>
                 {b}
               </option>
             ))}
@@ -333,11 +383,11 @@ function MenuEngineeringHub() {
         <div>
           <label className="field-label">Outlet</label>
           <select
-            value={outletFilter}
+            value={outletFilter || ""}
             onChange={(e) => setOutletFilter(e.target.value)}
           >
             {outletOptions.map((o) => (
-              <option key={o} value={o}>
+              <option key={o} value={o === "All" ? "" : o}>
                 {o}
               </option>
             ))}
@@ -350,6 +400,18 @@ function MenuEngineeringHub() {
             onClick={() => setRawItems(loadMenuItems())}
           >
             Refresh menu items
+          </button>
+          <button
+            type="button"
+            className="secondary-btn"
+            style={{ marginLeft: 6 }}
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent("pc:navigate", { detail: "recipes" })
+              )
+            }
+          >
+            Go to Recipes
           </button>
         </div>
       </div>
@@ -371,6 +433,14 @@ function MenuEngineeringHub() {
             Each point is a menu item. X = popularity
             (approx. units sold), Y = margin %.
           </p>
+          <button
+            type="button"
+            className="secondary-btn"
+            style={{ marginBottom: 8 }}
+            onClick={handleExplainWithAI}
+          >
+            Explain this chart with AI
+          </button>
           <div style={{ width: "100%", height: 260 }}>
             <ResponsiveContainer>
               <ScatterChart>
@@ -382,6 +452,7 @@ function MenuEngineeringHub() {
                 <YAxis
                   dataKey="marginPct"
                   name="Margin %"
+                  tickFormatter={(v) => `${v.toFixed(0)}%`}
                 />
                 <Tooltip
                   cursor={{ strokeDasharray: "3 3" }}
@@ -403,11 +474,22 @@ function MenuEngineeringHub() {
                   labelFormatter={() => ""}
                 />
                 <Legend />
-                <Scatter
-                  name="Menu Items"
-                  data={chartData}
-                  fill="#8884d8"
-                />
+                {Object.entries(groupedByClass).map(
+                  ([cls, data]) => (
+                    <Scatter
+                      key={cls}
+                      name={cls}
+                      data={data.map((i) => ({
+                        name: i.name,
+                        popularity: i.popularity,
+                        marginPct: i.marginPct * 100,
+                        classification: cls,
+                      }))}
+                      fill={CLASS_COLORS[cls] || "#94a3b8"}
+                      shape="circle"
+                    />
+                  )
+                )}
               </ScatterChart>
             </ResponsiveContainer>
           </div>
@@ -486,6 +568,21 @@ function MenuEngineeringHub() {
                         </td>
                         <td>{i.classification}</td>
                         <td style={{ fontSize: 12 }}>
+                          <span
+                            style={{
+                              backgroundColor:
+                                CLASS_COLORS[
+                                  i.classification
+                                ] || "#e2e8f0",
+                              color: "#0f172a",
+                              padding: "2px 6px",
+                              borderRadius: 6,
+                              fontWeight: 600,
+                              marginRight: 6,
+                            }}
+                          >
+                            {i.classification}
+                          </span>
                           {i.suggestedMove}
                         </td>
                       </tr>
@@ -532,40 +629,36 @@ function MenuEngineeringHub() {
             {aiExplainLoading && (
               <p style={{ fontSize: 12 }}>Explaining...</p>
             )}
-            {aiExplainText && (
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 12,
-                  backgroundColor: "#eef2ff",
-                  padding: 8,
-                  borderRadius: 6,
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {aiExplainText}
-              </div>
-            )}
+          {aiExplainText && (
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 12,
+                backgroundColor: "#eef2ff",
+                padding: 8,
+                borderRadius: 6,
+              }}
+              dangerouslySetInnerHTML={{ __html: marked.parse(aiExplainText) }}
+            />
+          )}
 
             {aiActionsLoading && (
               <p style={{ fontSize: 12, marginTop: 8 }}>
                 Generating action ideas...
               </p>
             )}
-            {aiActionsText && (
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 12,
-                  backgroundColor: "#f1f5f9",
-                  padding: 8,
-                  borderRadius: 6,
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {aiActionsText}
-              </div>
-            )}
+          {aiActionsText && (
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 12,
+                backgroundColor: "#f1f5f9",
+                padding: 8,
+                borderRadius: 6,
+              }}
+              dangerouslySetInnerHTML={{ __html: marked.parse(aiActionsText) }}
+            />
+          )}
           </div>
         </div>
       </div>

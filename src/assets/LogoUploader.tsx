@@ -1,6 +1,8 @@
 import React, { useState, ChangeEvent, FormEvent } from 'react';
+import { useData } from '../DataContext';
 
 const LogoUploader: React.FC = () => {
+  const { updateLogo } = useData();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,12 +46,12 @@ const LogoUploader: React.FC = () => {
     setIsUploading(true);
 
     try {
-      // Instead of uploading, we save the Base64 data URL to localStorage.
-      localStorage.setItem('pc_app_logo', preview);
-      setUploadMessage('Logo saved successfully! It will now appear in the header and on the login page.');
-      setError(null);
-      // We can trigger a custom event to notify other components (like the header) to update the logo.
-      window.dispatchEvent(new Event('logo-updated'));
+      const { success, error: saveError } = updateLogo(preview!);
+      if (success) {
+        setUploadMessage('Logo saved successfully! The new logo is now active.');
+      } else {
+        throw new Error(saveError || 'Could not save logo.');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save logo to local storage.');
     } finally {
