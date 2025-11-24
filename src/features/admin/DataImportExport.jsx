@@ -97,7 +97,6 @@ export default function DataImportExport() {
       setStatus("Saving snapshot to Cloud DB...");
       const snapshot = collectLocalSnapshot();
 
-      const resp = await fetch("/api/cloud-save-snapshot", {
       const resp = await fetch(apiUrl("/api/cloud-save-snapshot"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -119,7 +118,6 @@ export default function DataImportExport() {
   const handleLoadFromCloud = async () => {
     try {
       setStatus("Loading snapshot from Cloud DB...");
-      const resp = await fetch("/api/cloud-load-snapshot");
       const resp = await fetch(apiUrl("/api/cloud-load-snapshot"));
       if (!resp.ok) {
         const text = await resp.text();
