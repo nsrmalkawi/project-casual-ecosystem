@@ -1,7 +1,7 @@
 // src/features/data-entry/HREntry.jsx
 import { useEffect, useState } from "react";
 import { loadData, saveData } from "../../utils/storage";
-import { OUTLET_OPTIONS, HR_ROLES } from "../../config/lookups";
+import { OUTLET_OPTIONS, HR_ROLES, BRAND_OPTIONS } from "../../config/lookups";
 
 function makeId() {
   return Date.now().toString() + "-" + Math.random().toString(16).slice(2);
@@ -9,6 +9,9 @@ function makeId() {
 
 export default function HREntry() {
   const [rows, setRows] = useState(() => loadData("pc_hr_labor", []) || []);
+  const API_BASE = import.meta.env.VITE_API_BASE || "";
+  const apiUrl = (path) =>
+    API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
 
   useEffect(() => {
     saveData("pc_hr_labor", rows);
@@ -20,10 +23,15 @@ export default function HREntry() {
       {
         id: makeId(),
         date: "",
+        brand: "",
         outlet: "",
-        employee: "",
+        employeeName: "",
         role: "",
         hours: "",
+        hourlyRate: "",
+        basePay: "",
+        overtimePay: "",
+        otherPay: "",
         laborCost: "",
         notes: "",
       },
@@ -42,6 +50,32 @@ export default function HREntry() {
     setRows((prev) => prev.filter((r) => r.id !== rowId));
   };
 
+  const saveToCloud = async () => {
+    if (rows.length === 0) {
+      alert("No rows to save.");
+      return;
+    }
+    try {
+      for (const row of rows) {
+        const payload = { ...row };
+        delete payload.id;
+        const resp = await fetch(apiUrl("/api/hr-payroll"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`Failed to save row (${resp.status}): ${text}`);
+        }
+      }
+      alert("Saved to database. Use Admin > Data Import/Export to download.");
+    } catch (err) {
+      console.error("Save HR failed", err);
+      alert("Save failed. Check connection and server logs.");
+    }
+  };
+
   return (
     <div className="card">
       <h3 className="card-title">HR / Labor</h3>
@@ -54,11 +88,16 @@ export default function HREntry() {
           <thead>
             <tr>
               <th>Date</th>
+              <th>Brand</th>
               <th>Outlet</th>
               <th>Employee</th>
               <th>Role</th>
               <th>Hours</th>
-              <th>Labor Cost (JOD)</th>
+              <th>Hourly Rate</th>
+              <th>Base Pay</th>
+              <th>Overtime Pay</th>
+              <th>Other Pay</th>
+              <th>Total Labor Cost</th>
               <th>Notes</th>
               <th></th>
             </tr>
@@ -66,7 +105,7 @@ export default function HREntry() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan="8">No HR rows yet.</td>
+                <td colSpan="12">No HR rows yet.</td>
               </tr>
             ) : (
               rows.map((row) => (
@@ -79,6 +118,21 @@ export default function HREntry() {
                         handleChange(row.id, "date", e.target.value)
                       }
                     />
+                  </td>
+                  <td>
+                    <select
+                      value={row.brand || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "brand", e.target.value)
+                      }
+                    >
+                      <option value="">Select brand…</option>
+                      {BRAND_OPTIONS.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td>
                     <select
@@ -98,9 +152,9 @@ export default function HREntry() {
                   <td>
                     <input
                       type="text"
-                      value={row.employee || ""}
+                      value={row.employeeName || ""}
                       onChange={(e) =>
-                        handleChange(row.id, "employee", e.target.value)
+                        handleChange(row.id, "employeeName", e.target.value)
                       }
                     />
                   </td>
@@ -126,6 +180,46 @@ export default function HREntry() {
                       value={row.hours || ""}
                       onChange={(e) =>
                         handleChange(row.id, "hours", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={row.hourlyRate || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "hourlyRate", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={row.basePay || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "basePay", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={row.overtimePay || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "overtimePay", e.target.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={row.otherPay || ""}
+                      onChange={(e) =>
+                        handleChange(row.id, "otherPay", e.target.value)
                       }
                     />
                   </td>
@@ -167,6 +261,14 @@ export default function HREntry() {
         onClick={addRow}
       >
         + Add HR Row
+      </button>
+      <button
+        type="button"
+        className="secondary-btn"
+        style={{ marginTop: 8, marginLeft: 8 }}
+        onClick={saveToCloud}
+      >
+        Save to Cloud DB
       </button>
     </div>
   );

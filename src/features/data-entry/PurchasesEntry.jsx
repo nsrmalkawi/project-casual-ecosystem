@@ -10,8 +10,14 @@ const PURCHASE_FIELDS = [
   { key: "brand", label: "Brand" },
   { key: "outlet", label: "Outlet" },
   { key: "supplier", label: "Supplier" },
+  { key: "category", label: "Category" },
+  { key: "itemName", label: "Item" },
+  { key: "unit", label: "Unit" },
+  { key: "quantity", label: "Quantity" },
+  { key: "unitCost", label: "Unit Cost" },
+  { key: "totalCost", label: "Total Cost" },
   { key: "invoiceNo", label: "Invoice No" },
-  { key: "totalCost", label: "Total Cost (JOD)" },
+  { key: "paymentTerm", label: "Payment Term" },
   { key: "notes", label: "Notes" },
 ];
 
@@ -28,8 +34,14 @@ function normalizeRow(raw) {
     brand: raw.brand || "",
     outlet: raw.outlet || "",
     supplier: raw.supplier || "",
-    invoiceNo: raw.invoiceNo || "",
+    category: raw.category || "",
+    itemName: raw.itemName || "",
+    unit: raw.unit || "",
+    quantity: raw.quantity || "",
+    unitCost: raw.unitCost || "",
     totalCost: raw.totalCost || "",
+    invoiceNo: raw.invoiceNo || "",
+    paymentTerm: raw.paymentTerm || "",
     notes: raw.notes || "",
   };
 }
@@ -47,8 +59,14 @@ function PurchasesEntry() {
             brand: "",
             outlet: "",
             supplier: "",
-            invoiceNo: "",
+            category: "",
+            itemName: "",
+            unit: "",
+            quantity: "",
+            unitCost: "",
             totalCost: "",
+            invoiceNo: "",
+            paymentTerm: "",
             notes: "",
           },
         ];
@@ -114,8 +132,14 @@ function PurchasesEntry() {
         brand: "",
         outlet: "",
         supplier: "",
-        invoiceNo: "",
+        category: "",
+        itemName: "",
+        unit: "",
+        quantity: "",
+        unitCost: "",
         totalCost: "",
+        invoiceNo: "",
+        paymentTerm: "",
         notes: "",
       },
     ]);
@@ -136,6 +160,40 @@ function PurchasesEntry() {
 
   const handleExportCsv = () => {
     exportToCsv("purchases_export.csv", PURCHASE_FIELDS, rows);
+  };
+
+  const API_BASE = import.meta.env.VITE_API_BASE || "";
+  const apiUrl = (path) =>
+    API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
+
+  const saveToCloud = async () => {
+    const { isValid, errorsByRow } = validateRows("purchases", rows);
+    setErrorsByRow(errorsByRow);
+    if (!isValid) {
+      setFormMessage("Please fix the highlighted fields before saving to database.");
+      return;
+    }
+
+    try {
+      setFormMessage("Saving to database...");
+      for (const row of rows) {
+        const payload = { ...row };
+        delete payload.id;
+        const resp = await fetch(apiUrl("/api/purchases"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`Failed to save row (${resp.status}): ${text}`);
+        }
+      }
+      setFormMessage("Saved to database. Use Admin > Data Import/Export to download.");
+    } catch (err) {
+      console.error("Save purchases failed", err);
+      setFormMessage("Save failed. Check connection, DATABASE_URL, and logs.");
+    }
   };
 
   const handleImportCsv = (event) => {
@@ -195,6 +253,13 @@ function PurchasesEntry() {
           onClick={handleExportCsv}
         >
           Export CSV
+        </button>
+        <button
+          type="button"
+          className="primary-btn"
+          onClick={saveToCloud}
+        >
+          Save to Cloud DB
         </button>
 
         <label

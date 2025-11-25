@@ -1,6 +1,7 @@
 // src/features/data-entry/WasteEntry.jsx
 import { useState, useEffect } from "react";
 import { loadData, saveData } from "../../utils/storage";
+import { BRANDS, OUTLETS } from "../../config/lookups";
 
 const STORAGE_KEY = "pc_waste";
 
@@ -9,15 +10,20 @@ function WasteEntry() {
     date: "",
     brand: "",
     outlet: "",
+    category: "",
     itemName: "",
     quantity: "",
     unit: "",
-    costValue: "",
+    unitCost: "",
+    totalCost: "",
     reason: "",
     notes: "",
   });
 
   const [rows, setRows] = useState([]);
+  const API_BASE = import.meta.env.VITE_API_BASE || "";
+  const apiUrl = (path) =>
+    API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
 
   useEffect(() => {
     setRows(loadData(STORAGE_KEY, []));
@@ -33,8 +39,8 @@ function WasteEntry() {
   };
 
   const handleAdd = () => {
-    if (!form.date || !form.itemName || !form.costValue) {
-      alert("Date, Item, and Cost Value are required.");
+    if (!form.date || !form.itemName || !form.category || !form.unitCost || !form.totalCost || !form.reason) {
+      alert("Date, Category, Item, Reason, Unit Cost, and Total Cost are required.");
       return;
     }
 
@@ -49,19 +55,47 @@ function WasteEntry() {
       date: "",
       brand: "",
       outlet: "",
+      category: "",
       itemName: "",
       quantity: "",
       unit: "",
-      costValue: "",
+      unitCost: "",
+      totalCost: "",
       reason: "",
       notes: "",
     });
   };
 
   const totalWaste = rows.reduce(
-    (sum, row) => sum + (Number(row.costValue) || 0),
+    (sum, row) => sum + (Number(row.totalCost) || 0),
     0
   );
+
+  const saveToCloud = async () => {
+    if (rows.length === 0) {
+      alert("No rows to save.");
+      return;
+    }
+    try {
+      for (const row of rows) {
+        const payload = { ...row };
+        delete payload.id;
+        const resp = await fetch(apiUrl("/api/waste"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`Failed to save row (${resp.status}): ${text}`);
+        }
+      }
+      alert("Saved to database. Use Admin > Data Import/Export to download.");
+    } catch (err) {
+      console.error("Save waste failed", err);
+      alert("Save failed. Check connection and server logs.");
+    }
+  };
 
   return (
     <div className="card">
@@ -82,25 +116,39 @@ function WasteEntry() {
           />
         </div>
 
-        <div className="form-field">
-          <label>Brand</label>
-          <input
-            type="text"
-            name="brand"
-            value={form.brand}
-            onChange={handleChange}
-          />
-        </div>
+      <div className="form-field">
+        <label>Brand</label>
+        <select name="brand" value={form.brand} onChange={handleChange}>
+          <option value="">Select brand</option>
+          {BRANDS.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        <div className="form-field">
-          <label>Outlet</label>
-          <input
-            type="text"
-            name="outlet"
-            value={form.outlet}
-            onChange={handleChange}
-          />
-        </div>
+      <div className="form-field">
+        <label>Outlet</label>
+        <select name="outlet" value={form.outlet} onChange={handleChange}>
+          <option value="">Select outlet</option>
+          {OUTLETS.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="form-field">
+        <label>Category</label>
+        <input
+          type="text"
+          name="category"
+          value={form.category}
+          onChange={handleChange}
+        />
+      </div>
 
         <div className="form-field">
           <label>Item</label>
@@ -133,11 +181,21 @@ function WasteEntry() {
         </div>
 
         <div className="form-field">
-          <label>Cost Value (JOD)</label>
+          <label>Unit Cost (JOD)</label>
           <input
             type="number"
-            name="costValue"
-            value={form.costValue}
+            name="unitCost"
+            value={form.unitCost}
+            onChange={handleChange}
+          />
+        </div>
+
+        <div className="form-field">
+          <label>Total Cost (JOD)</label>
+          <input
+            type="number"
+            name="totalCost"
+            value={form.totalCost}
             onChange={handleChange}
           />
         </div>
@@ -166,6 +224,9 @@ function WasteEntry() {
 
       <button className="primary-btn" onClick={handleAdd}>
         Add Waste Row
+      </button>
+      <button className="secondary-btn" style={{ marginLeft: 8 }} onClick={saveToCloud}>
+        Save to Cloud DB
       </button>
 
       <div className="table-wrapper">

@@ -259,6 +259,205 @@ app.post("/api/sales", async (req, res) => {
   }
 });
 
+// Persist purchases rows into Postgres
+app.post("/api/purchases", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const {
+    date,
+    brand,
+    outlet,
+    supplier,
+    category,
+    itemName,
+    unit,
+    quantity,
+    unitCost,
+    totalCost,
+    invoiceNo,
+    paymentTerm,
+    notes,
+  } = req.body || {};
+
+  if (
+    !date ||
+    !brand ||
+    !outlet ||
+    !supplier ||
+    !category ||
+    !itemName ||
+    !unit ||
+    quantity == null ||
+    unitCost == null ||
+    totalCost == null
+  ) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO purchases (
+        date, brand, outlet, supplier, category, item_name, unit,
+        quantity, unit_cost, total_cost, invoice_no, payment_term, notes
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [
+        date,
+        brand,
+        outlet,
+        supplier,
+        category,
+        itemName,
+        unit,
+        quantity,
+        unitCost,
+        totalCost,
+        invoiceNo || null,
+        paymentTerm || null,
+        notes || null,
+      ]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Insert purchases error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+// Persist waste rows into Postgres
+app.post("/api/waste", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const {
+    date,
+    brand,
+    outlet,
+    category,
+    itemName,
+    reason,
+    quantity,
+    unit,
+    unitCost,
+    totalCost,
+    notes,
+  } = req.body || {};
+
+  if (
+    !date ||
+    !brand ||
+    !outlet ||
+    !category ||
+    !itemName ||
+    !reason ||
+    quantity == null ||
+    !unit ||
+    unitCost == null ||
+    totalCost == null
+  ) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO waste (
+        date, brand, outlet, category, item_name, reason,
+        quantity, unit, unit_cost, total_cost, notes
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        date,
+        brand,
+        outlet,
+        category,
+        itemName,
+        reason,
+        quantity,
+        unit,
+        unitCost,
+        totalCost,
+        notes || null,
+      ]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Insert waste error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+// Persist HR / payroll rows into Postgres
+app.post("/api/hr-payroll", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const {
+    date,
+    brand,
+    outlet,
+    employeeName,
+    role,
+    hours,
+    hourlyRate,
+    basePay,
+    overtimePay,
+    otherPay,
+    laborCost,
+    notes,
+  } = req.body || {};
+
+  if (
+    !date ||
+    !brand ||
+    !outlet ||
+    !employeeName ||
+    !role ||
+    hours == null ||
+    basePay == null ||
+    laborCost == null
+  ) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO hr_payroll (
+        date, brand, outlet, employee_name, role, hours,
+        hourly_rate, base_pay, overtime_pay, other_pay, labor_cost, notes
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [
+        date,
+        brand,
+        outlet,
+        employeeName,
+        role,
+        hours,
+        hourlyRate || null,
+        basePay,
+        overtimePay || null,
+        otherPay || null,
+        laborCost,
+        notes || null,
+      ]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Insert hr_payroll error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
 // Export endpoints (CSV & XLSX)
 
 app.get("/api/export/:table", async (req, res) => {
