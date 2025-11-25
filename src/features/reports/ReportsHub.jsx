@@ -1042,7 +1042,8 @@ function ReportsHub() {
                   name="Sales (JOD)"
                   stroke="#4f46e5"
                   strokeWidth={2.4}
-                  dot={false}
+                  dot={{ r: 3, stroke: "#4f46e5", fill: "#4f46e5" }}
+                  activeDot={{ r: 5, stroke: "#1d4ed8", fill: "#ffffff" }}
                 />
                 <Line
                   type="monotone"
@@ -1050,7 +1051,8 @@ function ReportsHub() {
                   name="EBITDA (JOD)"
                   stroke="#16a34a"
                   strokeWidth={2.4}
-                  dot={false}
+                  dot={{ r: 3, stroke: "#16a34a", fill: "#16a34a" }}
+                  activeDot={{ r: 5, stroke: "#15803d", fill: "#ffffff" }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -1072,10 +1074,10 @@ function ReportsHub() {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="totalSales" name="Sales" fill="#4f46e5" />
-                <Bar dataKey="totalFoodCost" name="Food cost" fill="#f97316" />
-                <Bar dataKey="totalLaborCost" name="Labor" fill="#0ea5e9" />
-                <Bar dataKey="ebitda" name="EBITDA" fill="#16a34a" />
+                <Bar dataKey="totalSales" name="Sales" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="totalFoodCost" name="Food cost" fill="#f97316" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="totalLaborCost" name="Labor" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="ebitda" name="EBITDA" fill="#16a34a" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

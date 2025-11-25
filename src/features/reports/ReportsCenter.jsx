@@ -153,7 +153,7 @@ export default function ReportsCenter() {
           mode: "report",
           payload: { reportId: report.id, data },
           question:
-            "Return structured markdown with sections: ## Snapshot (key numbers), ## Table (include one markdown table with at least 3 KPIs), ## Risks (bullets), ## Recommended Actions (3-5 bullets). Keep it concise, F&B focused.",
+            `Return structured markdown:\n- Title: "${report.title}"\n- Sections: ## Snapshot (key KPIs with numbers), ## Table (one markdown table with at least 3 KPIs | Value | Comment), ## Risks (bullets), ## Recommended Actions (3-5 bullets).\n- Keep concise and F&B focused.`,
         });
         setAiSummary(aiRes.text || "");
         setAiModel(aiRes.model || "");
@@ -200,7 +200,7 @@ export default function ReportsCenter() {
         mode: "report",
         payload: { scope: "full-system", summaries: results },
         question:
-          "Create structured markdown with sections: ## Executive Summary, ## Sales, ## Labor, ## COGS/Purchases, ## Waste, ## Opex/Petty, ## Inventory, ## Risks, ## Actions (5 bullets). Include at least two markdown tables (e.g., Sales vs Labor, Waste vs Purchases). Show key numbers with currency/%, concise and actionable.",
+          "Create structured markdown with sections: ## Executive Summary, ## Sales, ## Labor, ## COGS/Purchases, ## Waste, ## Opex/Petty, ## Inventory, ## Risks, ## Actions (5 bullets). Include at least two markdown tables (e.g., Sales vs Labor; Waste vs Purchases) with columns KPI | Value | Comment. Show key numbers with currency/%, concise and actionable.",
       });
 
       setFullReport(aiRes.text || "");
