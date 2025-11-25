@@ -1,6 +1,7 @@
 // NEW: Reports & KPI Center
 import { useMemo, useState } from "react";
 import { callAi } from "../../utils/aiClient";
+import { loadData } from "../../utils/storage";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ||
@@ -15,6 +16,8 @@ const ICON_MAP = {
   waste: "🗑️",
   finance: "💵",
   inventory: "📦",
+  custom_star: "⭐",
+  custom_fire: "🔥",
 };
 
 function fallbackSummary(summary) {
@@ -24,9 +27,16 @@ function fallbackSummary(summary) {
     .join(", ");
   return entries ? `Summary: ${entries}` : "";
 }
+
+async function fetchJson(url) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
 import { reportsConfig } from "../../config/reportsConfig";
 
 function ReportCard({ report, onOpen }) {
+  const icon = ICON_MAP[report.icon] || ICON_MAP[report.iconOverride] || report.icon || "📊";
   return (
     <div
       className="card"
@@ -48,13 +58,51 @@ function ReportCard({ report, onOpen }) {
           }}
         >
           {/* NEW: safe default icon for report cards */}
-          {ICON_MAP[report.icon] || report.icon || "📊"}
+          {icon}
         </span>
         <div>
           <div style={{ fontWeight: 600 }}>{report.title}</div>
           <div style={{ fontSize: 12, color: "#6b7280" }}>{report.category}</div>
         </div>
       </div>
+
+      {fullStatus !== "idle" && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h3 className="card-title">Full system AI report</h3>
+              <div className="page-subtitle">
+                Executive summary, risks, and recommended actions across sales, labor, COGS, waste, opex, petty, and inventory.
+              </div>
+            </div>
+            <button type="button" className="secondary-btn" onClick={() => setFullStatus("idle")}>
+              Hide
+            </button>
+          </div>
+          {fullError && <div style={{ color: "#b91c1c", marginTop: 6 }}>{fullError}</div>}
+          {fullStatus === "loading" && <div style={{ marginTop: 6 }}>Generating...</div>}
+          {fullReport && (
+            <div
+              style={{
+                marginTop: 8,
+                whiteSpace: "pre-wrap",
+                background: "#f8fafc",
+                padding: 10,
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 13,
+              }}
+            >
+              {fullReport}
+              {fullReportModel && (
+                <div style={{ fontSize: 11, color: "#475569", marginTop: 6 }}>
+                  Model: {fullReportModel}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ fontSize: 13, color: "#374151", flex: 1 }}>{report.description}</div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {report.tags?.map((t) => (
@@ -99,6 +147,11 @@ export default function ReportsCenter() {
   const [aiSummary, setAiSummary] = useState("");
   const [aiModel, setAiModel] = useState("");
   const [aiStatus, setAiStatus] = useState("idle");
+  const [iconOverrides] = useState(() => loadData("pc_report_icons_v1", {}) || {});
+  const [fullReport, setFullReport] = useState("");
+  const [fullReportModel, setFullReportModel] = useState("");
+  const [fullStatus, setFullStatus] = useState("idle");
+  const [fullError, setFullError] = useState("");
 
   const categories = useMemo(() => {
     const set = new Set(reportsConfig.map((r) => r.category).filter(Boolean));
@@ -107,7 +160,7 @@ export default function ReportsCenter() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return reportsConfig.filter((r) => {
+    return reportsConfig.map((r) => ({ ...r, icon: iconOverrides[r.id] || r.icon })).filter((r) => {
       const matchesCategory = !category || r.category === category;
       const haystack = `${r.title} ${r.description} ${r.tags?.join(" ")}`.toLowerCase();
       const matchesQuery = !q || haystack.includes(q);
@@ -156,6 +209,49 @@ export default function ReportsCenter() {
     }
   };
 
+  // NEW: Generate a full-system AI report across all summaries
+  const handleFullReport = async () => {
+    if (!API_BASE) return;
+    setFullStatus("loading");
+    setFullError("");
+    setFullReport("");
+    setFullReportModel("");
+    try {
+      const endpoints = [
+        { id: "sales", path: "/api/reports/sales-summary" },
+        { id: "purchases", path: "/api/reports/purchases-summary" },
+        { id: "waste", path: "/api/reports/waste-summary" },
+        { id: "hr", path: "/api/reports/hr-summary" },
+        { id: "rent", path: "/api/reports/rent-opex-summary" },
+        { id: "petty", path: "/api/reports/petty-cash-summary" },
+        { id: "inventory", path: "/api/reports/inventory-summary" },
+      ];
+
+      const results = {};
+      for (const ep of endpoints) {
+        try {
+          results[ep.id] = await fetchJson(`${API_BASE}${ep.path}`);
+        } catch (err) {
+          results[ep.id] = { error: err.message };
+        }
+      }
+
+      const aiRes = await callAi({
+        mode: "report",
+        payload: { scope: "full-system", summaries: results },
+        question:
+          "Create a well-rounded F&B performance report with sections: Executive Summary, Sales, Labor, COGS/Purchases, Waste, Opex/Petty, Inventory, Risks, and Recommended Actions (5 bullets). Include key numbers (JOD) and percentages where available. Keep it concise and actionable.",
+      });
+
+      setFullReport(aiRes.text || "");
+      setFullReportModel(aiRes.model || "");
+      setFullStatus("done");
+    } catch (err) {
+      setFullError(err.message || "Failed to generate full report");
+      setFullStatus("error");
+    }
+  };
+
   return (
     <div>
       <h2 className="page-title">Reports & KPI Center</h2>
@@ -200,6 +296,14 @@ export default function ReportsCenter() {
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          className="secondary-btn"
+          onClick={handleFullReport}
+          disabled={fullStatus === "loading"}
+        >
+          {fullStatus === "loading" ? "Generating full AI report..." : "Full system AI report"}
+        </button>
       </div>
 
       <div

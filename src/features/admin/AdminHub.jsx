@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import DataImportExport from "./DataImportExport";
 import AlertRulesAdmin from "./AlertRulesAdmin";
 import LogoUploader from "../../assets/LogoUploader";
+// NEW: simple icon gallery for reports
+import ReportsIconManager from "./ReportsIconManager";
 import {
   getMasterData,
   saveMasterData,
@@ -17,7 +19,7 @@ const ADMIN_TABS = [
   { id: "data", label: "Data Import / Export" },
   { id: "alerts", label: "Alerts & Thresholds" },
   { id: "master", label: "Dropdowns / Master Data" },
-  { id: "branding", label: "Branding & Logo" },
+  { id: "branding", label: "Branding, Logo & Report Icons" },
 ];
 
 // --- Subcomponent: Master data (dropdowns) editor ---
@@ -238,7 +240,12 @@ function AdminHub() {
       {activeTab === "data" && <DataImportExport />}
       {activeTab === "alerts" && <AlertRulesAdmin />}
       {activeTab === "master" && <MasterDataAdmin />}
-      {activeTab === "branding" && <LogoUploader />}
+      {activeTab === "branding" && (
+        <div style={{ display: "grid", gap: 12 }}>
+          <LogoUploader />
+          <ReportsIconManager />
+        </div>
+      )}
     </div>
   );
 }
