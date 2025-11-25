@@ -45,9 +45,8 @@ const PRIMARY_MODEL =
   "gemini-2.5-flash";
 
 const FALLBACK_MODELS = [
-  // Only keep supported, lightweight fallbacks
+  // Only keep supported, lightweight fallbacks (remove 1.5 to avoid 404s)
   "gemini-2.0-flash",
-  "gemini-1.5-flash",
 ];
 
 const DATABASE_URL = process.env.DATABASE_URL;
