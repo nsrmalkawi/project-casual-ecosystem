@@ -9,6 +9,10 @@ import {
   DEFAULT_PETTY_CASH_CATEGORIES,
   DEFAULT_HR_ROLES,
 } from "../../config/lookups";
+import SalesSection from "./SalesSection";
+import PurchasesEntry from "./PurchasesEntry";
+import WasteEntry from "./WasteEntry";
+import HREntry from "./HREntry";
 
 // Tabs inside Data Entry Hub
 const SECTION_TABS = [
@@ -44,7 +48,7 @@ function useLocalArray(key) {
 function DataEntryHub() {
   const [activeSection, setActiveSection] = useState("sales");
 
-  // All core datasets
+  // All core datasets (legacy local caches)
   const [sales, setSales] = useLocalArray("pc_sales");
   const [purchases, setPurchases] = useLocalArray("pc_purchases");
   const [waste, setWaste] = useLocalArray("pc_waste");
@@ -1163,21 +1167,21 @@ function DataEntryHub() {
   const renderActiveSection = () => {
     switch (activeSection) {
       case "sales":
-        return renderSalesSection();
+        return <SalesSection />;
       case "purchases":
-        return renderPurchasesSection();
+        return <PurchasesEntry />;
       case "waste":
-        return renderWasteSection();
+        return <WasteEntry />;
       case "inventory":
         return renderInventorySection();
       case "rent-opex":
         return renderRentSection();
       case "hr-labor":
-        return renderHrSection();
+        return <HREntry />;
       case "petty-cash":
         return renderPettyCashSection();
       default:
-        return renderSalesSection();
+        return <SalesSection />;
     }
   };
 
