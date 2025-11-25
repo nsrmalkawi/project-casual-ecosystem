@@ -42,6 +42,9 @@ function PettyCashEntry() {
 
   const [errorsByRow, setErrorsByRow] = useState({});
   const [formMessage, setFormMessage] = useState("");
+  const API_BASE = import.meta.env.VITE_API_BASE || "";
+  const apiUrl = (path) =>
+    API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
 
   useEffect(() => {
     try {
@@ -122,6 +125,47 @@ function PettyCashEntry() {
     exportToCsv("petty_cash_export.csv", PETTY_CASH_FIELDS, rows);
   };
 
+  const downloadFromCloud = async () => {
+    try {
+      const resp = await fetch(apiUrl("/api/export/petty_cash"));
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Download failed: ${resp.status} ${text}`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "petty_cash_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download petty cash failed", err);
+      setFormMessage("Cloud download failed. Check connection and DATABASE_URL.");
+    }
+  };
+
+  const loadFromCloud = async () => {
+    try {
+      const resp = await fetch(apiUrl("/api/petty-cash"));
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Load failed: ${resp.status} ${text}`);
+      }
+      const data = await resp.json();
+      const serverRows = (data.rows || []).map(normalizeRow).filter(Boolean);
+      if (!serverRows.length) {
+        setFormMessage("No rows found in database.");
+      } else {
+        setRows(serverRows);
+        setFormMessage("Loaded from database.");
+      }
+    } catch (err) {
+      console.error("Load petty cash failed", err);
+      setFormMessage("Load failed. Check connection and DATABASE_URL.");
+    }
+  };
+
   const handleImportCsv = (event) => {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -176,6 +220,20 @@ function PettyCashEntry() {
           onClick={handleExportCsv}
         >
           Export CSV
+        </button>
+        <button
+          type="button"
+          className="secondary-btn"
+          onClick={downloadFromCloud}
+        >
+          Download from Cloud
+        </button>
+        <button
+          type="button"
+          className="secondary-btn"
+          onClick={loadFromCloud}
+        >
+          Load from Cloud DB
         </button>
 
         <label

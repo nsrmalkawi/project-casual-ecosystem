@@ -601,6 +601,102 @@ app.get("/api/hr-payroll", async (_req, res) => {
   }
 });
 
+// Persist rent/opex rows
+app.post("/api/rent-opex", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { date, brand, outlet, category, description, amount, notes } = req.body || {};
+
+  if (!date || !brand || !outlet || !category || !description || amount == null) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO rent_opex (date, brand, outlet, category, description, amount, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [date, brand, outlet, category, description, amount, notes || null]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Insert rent_opex error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+// Fetch rent/opex
+app.get("/api/rent-opex", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date, brand, outlet, category, description, amount, notes
+       FROM rent_opex
+       ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch rent_opex error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+// Persist petty cash
+app.post("/api/petty-cash", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { date, brand, outlet, category, description, amount, notes } = req.body || {};
+
+  if (!date || !brand || !outlet || !category || !description || amount == null) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO petty_cash (date, brand, outlet, category, description, amount, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [date, brand, outlet, category, description, amount, notes || null]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Insert petty_cash error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+// Fetch petty cash
+app.get("/api/petty-cash", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date, brand, outlet, category, description, amount, notes
+       FROM petty_cash
+       ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch petty_cash error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
 // Fetch HR / payroll rows
 app.get("/api/hr-payroll", async (_req, res) => {
   if (!pool) {
