@@ -207,27 +207,6 @@ function SalesSection() {
     exportToCsv("sales_export.csv", SALES_FIELDS, rows);
   };
 
-  const loadFromCloud = async () => {
-    try {
-      const resp = await fetch(apiUrl("/api/sales"));
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Load failed: ${resp.status} ${text}`);
-      }
-      const data = await resp.json();
-      const serverRows = (data.rows || []).map(normalizeRow).filter(Boolean);
-      if (!serverRows.length) {
-        setFormMessage("No rows found in database.");
-      } else {
-        setRows(serverRows);
-        setFormMessage("Loaded from database.");
-      }
-    } catch (err) {
-      console.error("Load from cloud failed", err);
-      setFormMessage("Load failed. Check connection and DATABASE_URL.");
-    }
-  };
-
   const handleImportCsv = (event) => {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
