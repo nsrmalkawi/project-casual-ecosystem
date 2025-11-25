@@ -40,5 +40,10 @@ Frontend (Static Site)
 - Petty Cash summary: `GET /api/reports/petty-cash-summary?from=...&to=...&brand=...&outlet=...&category=...`
 - Inventory summary: `GET /api/reports/inventory-summary?category=...&brand=...`
 
+## NEW: Reports & KPI Center
+- Config: `src/config/reportsConfig.js`
+- UI: `src/features/reports/ReportsCenter.jsx` (shown under the Reports tab)
+- Filterable cards with search/category; "Open" uses the configured route or tab.
+
 ## Mobile responsiveness
 The layout adapts under 900px: stacked panels, wrapped nav buttons, compressed padding, and horizontal scroll on tables.

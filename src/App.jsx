@@ -4,6 +4,7 @@ import "./App.css";
 
 import DataEntryHub from "./features/data-entry/DataEntryHub";
 import ReportsHub from "./features/reports/ReportsHub";
+import ReportsCenter from "./features/reports/ReportsCenter"; // NEW: Reports Center
 import CashFlowHub from "./features/reports/CashFlowHub";
 import MenuEngineeringHub from "./features/menu-engineering/MenuEngineeringHub";
 import RecipesManager from "./features/recipes/RecipesManager";
@@ -423,7 +424,7 @@ function App() {
           {activeTab === "data-entry" &&
             (role === "admin" || role === "manager") && <DataEntryHub />}
 
-          {activeTab === "reports" && <ReportsHub />}
+        {activeTab === "reports" && <ReportsCenter />} {/* NEW: Reports Center */}
 
           {activeTab === "cash-flow" && <CashFlowHub />}
 
