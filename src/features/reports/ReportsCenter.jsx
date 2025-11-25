@@ -293,6 +293,7 @@ export default function ReportsCenter() {
         ) : (
           <>
             <SummaryTile label="Net sales" value={totals.sales?.netsales || totals.sales?.netSales} color="#4f46e5" loading={totalsLoading} />
+            <SummaryTile label="EBITDA" value={totals.sales?.ebitda || totals.sales?.ebitdaValue} color="#16a34a" loading={totalsLoading} />
             <SummaryTile label="Purchases" value={totals.purchases?.totalcost || totals.purchases?.totalCost} color="#f97316" loading={totalsLoading} />
             <SummaryTile label="Waste cost" value={totals.waste?.totalcost || totals.waste?.totalCost} color="#dc2626" loading={totalsLoading} />
             <SummaryTile label="Labor cost" value={totals.hr?.laborcost || totals.hr?.laborCost} color="#0ea5e9" loading={totalsLoading} />
