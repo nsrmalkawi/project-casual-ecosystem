@@ -71,6 +71,26 @@ function WasteEntry() {
     0
   );
 
+  const downloadFromCloud = async () => {
+    try {
+      const resp = await fetch(apiUrl("/api/export/waste"));
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Download failed: ${resp.status} ${text}`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "waste_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download waste failed", err);
+      alert("Cloud download failed. Check connection and DATABASE_URL.");
+    }
+  };
+
   const saveToCloud = async () => {
     if (rows.length === 0) {
       alert("No rows to save.");
@@ -224,6 +244,9 @@ function WasteEntry() {
 
       <button className="primary-btn" onClick={handleAdd}>
         Add Waste Row
+      </button>
+      <button className="secondary-btn" style={{ marginLeft: 8 }} onClick={downloadFromCloud}>
+        Download from Cloud
       </button>
       <button className="secondary-btn" style={{ marginLeft: 8 }} onClick={saveToCloud}>
         Save to Cloud DB

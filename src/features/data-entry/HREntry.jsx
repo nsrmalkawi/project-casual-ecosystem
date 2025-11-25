@@ -12,6 +12,25 @@ export default function HREntry() {
   const API_BASE = import.meta.env.VITE_API_BASE || "";
   const apiUrl = (path) =>
     API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
+  const downloadFromCloud = async () => {
+    try {
+      const resp = await fetch(apiUrl("/api/export/hr_payroll"));
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Download failed: ${resp.status} ${text}`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "hr_payroll_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download HR failed", err);
+      alert("Cloud download failed. Check connection and DATABASE_URL.");
+    }
+  };
 
   useEffect(() => {
     saveData("pc_hr_labor", rows);
@@ -269,6 +288,14 @@ export default function HREntry() {
         onClick={saveToCloud}
       >
         Save to Cloud DB
+      </button>
+      <button
+        type="button"
+        className="secondary-btn"
+        style={{ marginTop: 8, marginLeft: 8 }}
+        onClick={downloadFromCloud}
+      >
+        Download from Cloud
       </button>
     </div>
   );

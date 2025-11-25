@@ -165,6 +165,25 @@ function PurchasesEntry() {
   const API_BASE = import.meta.env.VITE_API_BASE || "";
   const apiUrl = (path) =>
     API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
+  const downloadFromCloud = async () => {
+    try {
+      const resp = await fetch(apiUrl("/api/export/purchases"));
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Download failed: ${resp.status} ${text}`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "purchases_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download purchases failed", err);
+      setFormMessage("Cloud download failed. Check connection and DATABASE_URL.");
+    }
+  };
 
   const saveToCloud = async () => {
     const { isValid, errorsByRow } = validateRows("purchases", rows);
@@ -253,6 +272,13 @@ function PurchasesEntry() {
           onClick={handleExportCsv}
         >
           Export CSV
+        </button>
+        <button
+          type="button"
+          className="secondary-btn"
+          onClick={downloadFromCloud}
+        >
+          Download from Cloud
         </button>
         <button
           type="button"
