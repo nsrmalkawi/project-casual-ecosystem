@@ -346,8 +346,14 @@ function PurchasesEntry() {
               <th>Brand</th>
               <th>Outlet</th>
               <th>Supplier</th>
-              <th>Invoice No</th>
+              <th>Category</th>
+              <th>Item</th>
+              <th>Unit</th>
+              <th>Quantity</th>
+              <th>Unit Cost</th>
               <th>Total Cost (JOD)</th>
+              <th>Invoice No</th>
+              <th>Payment Term</th>
               <th>Notes</th>
               <th></th>
             </tr>
@@ -355,7 +361,7 @@ function PurchasesEntry() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan="8">No purchase rows yet.</td>
+                <td colSpan="13">No purchase rows yet.</td>
               </tr>
             ) : (
               rows.map((row) => (
@@ -457,16 +463,109 @@ function PurchasesEntry() {
                     </div>
                   </td>
 
-                  {/* Invoice No */}
+                  {/* Category */}
                   <td>
-                    <input
-                      type="text"
-                      value={row.invoiceNo || ""}
-                      onChange={(e) =>
-                        updateRowField(row.id, "invoiceNo", e.target.value)
-                      }
-                      placeholder="Optional"
-                    />
+                    <div className="field-with-error">
+                      <input
+                        type="text"
+                        value={row.category || ""}
+                        onChange={(e) =>
+                          updateRowField(row.id, "category", e.target.value)
+                        }
+                        className={
+                          getError(row.id, "category") ? "input-error" : ""
+                        }
+                      />
+                      {getError(row.id, "category") && (
+                        <div className="error-text">
+                          {getError(row.id, "category")}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Item */}
+                  <td>
+                    <div className="field-with-error">
+                      <input
+                        type="text"
+                        value={row.itemName || ""}
+                        onChange={(e) =>
+                          updateRowField(row.id, "itemName", e.target.value)
+                        }
+                        className={
+                          getError(row.id, "itemName") ? "input-error" : ""
+                        }
+                      />
+                      {getError(row.id, "itemName") && (
+                        <div className="error-text">
+                          {getError(row.id, "itemName")}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Unit */}
+                  <td>
+                    <div className="field-with-error">
+                      <input
+                        type="text"
+                        value={row.unit || ""}
+                        onChange={(e) =>
+                          updateRowField(row.id, "unit", e.target.value)
+                        }
+                        className={getError(row.id, "unit") ? "input-error" : ""}
+                      />
+                      {getError(row.id, "unit") && (
+                        <div className="error-text">
+                          {getError(row.id, "unit")}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Quantity */}
+                  <td>
+                    <div className="field-with-error">
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={row.quantity || ""}
+                        onChange={(e) =>
+                          updateRowField(row.id, "quantity", e.target.value)
+                        }
+                        className={
+                          getError(row.id, "quantity") ? "input-error" : ""
+                        }
+                      />
+                      {getError(row.id, "quantity") && (
+                        <div className="error-text">
+                          {getError(row.id, "quantity")}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Unit Cost */}
+                  <td>
+                    <div className="field-with-error">
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={row.unitCost || ""}
+                        onChange={(e) =>
+                          updateRowField(row.id, "unitCost", e.target.value)
+                        }
+                        className={
+                          getError(row.id, "unitCost") ? "input-error" : ""
+                        }
+                      />
+                      {getError(row.id, "unitCost") && (
+                        <div className="error-text">
+                          {getError(row.id, "unitCost")}
+                        </div>
+                      )}
+                    </div>
                   </td>
 
                   {/* Total Cost */}
@@ -489,6 +588,30 @@ function PurchasesEntry() {
                         </div>
                       )}
                     </div>
+                  </td>
+
+                  {/* Invoice No */}
+                  <td>
+                    <input
+                      type="text"
+                      value={row.invoiceNo || ""}
+                      onChange={(e) =>
+                        updateRowField(row.id, "invoiceNo", e.target.value)
+                      }
+                      placeholder="Optional"
+                    />
+                    </td>
+
+                  {/* Payment Term */}
+                  <td>
+                    <input
+                      type="text"
+                      value={row.paymentTerm || ""}
+                      onChange={(e) =>
+                        updateRowField(row.id, "paymentTerm", e.target.value)
+                      }
+                      placeholder="Optional"
+                    />
                   </td>
 
                   {/* Notes */}
