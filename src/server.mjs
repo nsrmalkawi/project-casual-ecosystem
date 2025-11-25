@@ -203,6 +203,62 @@ app.get("/api/health", (_req, res) => {
   }
 });
 
+// Persist sales rows into Postgres
+app.post("/api/sales", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const {
+    date,
+    brand,
+    outlet,
+    channel,
+    orders,
+    covers,
+    grossSales,
+    discounts,
+    netSales,
+    vat,
+    deliveryFees,
+    notes,
+  } = req.body || {};
+
+  if (!date || !brand || !outlet || !channel || orders == null || grossSales == null || netSales == null) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO sales (
+        date, brand, outlet, channel, orders, covers,
+        gross_sales, discounts, net_sales, vat, delivery_fees, notes
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [
+        date,
+        brand,
+        outlet,
+        channel,
+        orders,
+        covers || null,
+        grossSales,
+        discounts || null,
+        netSales,
+        vat || null,
+        deliveryFees || null,
+        notes || null,
+      ]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Insert sales error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
 // Export endpoints (CSV & XLSX)
 
 app.get("/api/export/:table", async (req, res) => {

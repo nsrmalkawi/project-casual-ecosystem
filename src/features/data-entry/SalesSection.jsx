@@ -49,6 +49,9 @@ function SalesSection() {
 
   const [errorsByRow, setErrorsByRow] = useState({});
   const [formMessage, setFormMessage] = useState("");
+  const API_BASE = import.meta.env.VITE_API_BASE || "";
+  const apiUrl = (path) =>
+    API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
 
   useEffect(() => {
     try {
@@ -128,6 +131,36 @@ function SalesSection() {
       ? errorsByRow[rowId][field]
       : "";
 
+  const saveToCloud = async () => {
+    const { isValid, errorsByRow } = validateRows("sales", rows);
+    setErrorsByRow(errorsByRow);
+    if (!isValid) {
+      setFormMessage("Please fix the highlighted fields before saving to database.");
+      return;
+    }
+
+    try {
+      setFormMessage("Saving to database...");
+      for (const row of rows) {
+        const payload = { ...row };
+        delete payload.id; // local-only identifier
+        const resp = await fetch(apiUrl("/api/sales"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`Failed to save row (${resp.status}): ${text}`);
+        }
+      }
+      setFormMessage("Saved to database. Use Admin > Data Import/Export to download.");
+    } catch (err) {
+      console.error("Save to cloud failed", err);
+      setFormMessage("Save failed. Check connection, DATABASE_URL, and logs.");
+    }
+  };
+
   // ---------- CSV HANDLERS ----------
 
   const handleExportCsv = () => {
@@ -188,6 +221,13 @@ function SalesSection() {
           onClick={handleExportCsv}
         >
           Export CSV
+        </button>
+        <button
+          type="button"
+          className="primary-btn"
+          onClick={saveToCloud}
+        >
+          Save to Cloud DB
         </button>
 
         <label
