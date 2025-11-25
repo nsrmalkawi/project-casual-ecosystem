@@ -22,6 +22,17 @@ export const DEFAULT_OUTLETS = [
   "Other",
 ];
 
+// Common sales channels
+export const SALES_CHANNELS = [
+  "Dine-in",
+  "Takeaway",
+  "Delivery",
+  "Pickup",
+  "Kiosk",
+  "Catering / Events",
+  "Other",
+];
+
 export const DEFAULT_WASTE_REASONS = [
   "Spoilage",
   "Overproduction",
@@ -55,6 +66,10 @@ export const OUTLET_OPTIONS = DEFAULT_OUTLETS;
 export const WASTE_REASON_OPTIONS = DEFAULT_WASTE_REASONS;
 export const PETTY_CASH_CATEGORY_OPTIONS = DEFAULT_PETTY_CASH_CATEGORIES;
 export const HR_ROLE_OPTIONS = DEFAULT_HR_ROLES;
+
+// Aliases used by data-entry components
+export const BRANDS = DEFAULT_BRANDS;
+export const OUTLETS = DEFAULT_OUTLETS;
 
 // ---- Helpers to persist lists in localStorage ----
 
