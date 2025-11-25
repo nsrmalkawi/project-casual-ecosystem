@@ -601,6 +601,87 @@ app.get("/api/hr-payroll", async (_req, res) => {
   }
 });
 
+// Persist inventory items
+app.post("/api/inventory-items", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const {
+    itemCode,
+    itemName,
+    category,
+    brand,
+    defaultOutlet,
+    unit,
+    parLevel,
+    minLevel,
+    lastCost,
+    avgCost,
+    currentQty,
+    notes,
+  } = req.body || {};
+
+  if (!itemCode || !itemName || !category || !unit || lastCost == null) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO inventory_items (
+        item_code, item_name, category, brand, default_outlet, unit,
+        par_level, min_level, last_cost, avg_cost, current_qty, notes
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [
+        itemCode,
+        itemName,
+        category,
+        brand || null,
+        defaultOutlet || null,
+        unit,
+        parLevel || null,
+        minLevel || null,
+        lastCost,
+        avgCost || null,
+        currentQty || null,
+        notes || null,
+      ]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Insert inventory_items error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+// Fetch inventory items
+app.get("/api/inventory-items", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, item_code AS "itemCode", item_name AS "itemName",
+              category, brand, default_outlet AS "defaultOutlet", unit,
+              par_level AS "parLevel", min_level AS "minLevel",
+              last_cost AS "lastCost", avg_cost AS "avgCost",
+              current_qty AS "currentQty", notes
+       FROM inventory_items
+       ORDER BY item_name ASC
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch inventory_items error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
 // Persist rent/opex rows
 app.post("/api/rent-opex", async (req, res) => {
   if (!pool) {

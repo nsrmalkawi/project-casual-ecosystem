@@ -13,6 +13,7 @@ import SalesSection from "./SalesSection";
 import PurchasesEntry from "./PurchasesEntry";
 import WasteEntry from "./WasteEntry";
 import HREntry from "./HREntry";
+import InventoryEntry from "./InventoryEntry";
 
 // Tabs inside Data Entry Hub
 const SECTION_TABS = [
@@ -1173,7 +1174,7 @@ function DataEntryHub() {
       case "waste":
         return <WasteEntry />;
       case "inventory":
-        return renderInventorySection();
+        return <InventoryEntry />;
       case "rent-opex":
         return renderRentSection();
       case "hr-labor":
