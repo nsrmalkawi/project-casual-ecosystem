@@ -1,5 +1,5 @@
 ﻿// NEW: Reports & KPI Center
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { callAi } from "../../utils/aiClient";
 import { loadData } from "../../utils/storage";
 import { reportsConfig } from "../../config/reportsConfig";
