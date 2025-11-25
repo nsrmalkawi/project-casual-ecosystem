@@ -33,6 +33,9 @@ Frontend (Static Site)
 
 ## Reporting (example)
 - Sales summary: `GET /api/reports/sales-summary?from=YYYY-MM-DD&to=YYYY-MM-DD&brand=...&outlet=...`
+- Purchases summary: `GET /api/reports/purchases-summary?from=...&to=...&brand=...&outlet=...&supplier=...&category=...`
+- Waste summary: `GET /api/reports/waste-summary?from=...&to=...&brand=...&outlet=...&category=...&reason=...`
+- HR summary: `GET /api/reports/hr-summary?from=...&to=...&brand=...&outlet=...&role=...`
 
 ## Mobile responsiveness
 The layout adapts under 900px: stacked panels, wrapped nav buttons, compressed padding, and horizontal scroll on tables.

@@ -127,6 +127,180 @@ app.get("/api/reports/sales-summary", async (req, res) => {
   }
 });
 
+// Purchases summary
+app.get("/api/reports/purchases-summary", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { from, to, brand, outlet, supplier, category } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (from) {
+    filters.push(`date >= $${idx++}`);
+    params.push(from);
+  }
+  if (to) {
+    filters.push(`date <= $${idx++}`);
+    params.push(to);
+  }
+  if (brand) {
+    filters.push(`brand = $${idx++}`);
+    params.push(brand);
+  }
+  if (outlet) {
+    filters.push(`outlet = $${idx++}`);
+    params.push(outlet);
+  }
+  if (supplier) {
+    filters.push(`supplier = $${idx++}`);
+    params.push(supplier);
+  }
+  if (category) {
+    filters.push(`category = $${idx++}`);
+    params.push(category);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          COALESCE(SUM(total_cost),0) AS totalCost,
+          COALESCE(SUM(quantity),0)    AS quantity
+        FROM purchases
+        ${where}
+      `,
+      params
+    );
+    res.json({ ok: true, summary: rows[0] || {} });
+  } catch (err) {
+    console.error("Purchases summary error:", err);
+    res.status(500).json({ error: "REPORT_FAILED", message: err.message });
+  }
+});
+
+// Waste summary
+app.get("/api/reports/waste-summary", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { from, to, brand, outlet, category, reason } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (from) {
+    filters.push(`date >= $${idx++}`);
+    params.push(from);
+  }
+  if (to) {
+    filters.push(`date <= $${idx++}`);
+    params.push(to);
+  }
+  if (brand) {
+    filters.push(`brand = $${idx++}`);
+    params.push(brand);
+  }
+  if (outlet) {
+    filters.push(`outlet = $${idx++}`);
+    params.push(outlet);
+  }
+  if (category) {
+    filters.push(`category = $${idx++}`);
+    params.push(category);
+  }
+  if (reason) {
+    filters.push(`reason = $${idx++}`);
+    params.push(reason);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          COALESCE(SUM(total_cost),0) AS totalCost,
+          COALESCE(SUM(quantity),0)    AS quantity
+        FROM waste
+        ${where}
+      `,
+      params
+    );
+    res.json({ ok: true, summary: rows[0] || {} });
+  } catch (err) {
+    console.error("Waste summary error:", err);
+    res.status(500).json({ error: "REPORT_FAILED", message: err.message });
+  }
+});
+
+// HR / payroll summary
+app.get("/api/reports/hr-summary", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { from, to, brand, outlet, role } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (from) {
+    filters.push(`date >= $${idx++}`);
+    params.push(from);
+  }
+  if (to) {
+    filters.push(`date <= $${idx++}`);
+    params.push(to);
+  }
+  if (brand) {
+    filters.push(`brand = $${idx++}`);
+    params.push(brand);
+  }
+  if (outlet) {
+    filters.push(`outlet = $${idx++}`);
+    params.push(outlet);
+  }
+  if (role) {
+    filters.push(`role = $${idx++}`);
+    params.push(role);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          COALESCE(SUM(hours),0)       AS hours,
+          COALESCE(SUM(base_pay),0)    AS basePay,
+          COALESCE(SUM(overtime_pay),0) AS overtimePay,
+          COALESCE(SUM(other_pay),0)    AS otherPay,
+          COALESCE(SUM(labor_cost),0)   AS laborCost
+        FROM hr_payroll
+        ${where}
+      `,
+      params
+    );
+    res.json({ ok: true, summary: rows[0] || {} });
+  } catch (err) {
+    console.error("HR summary error:", err);
+    res.status(500).json({ error: "REPORT_FAILED", message: err.message });
+  }
+});
+
+
 async function callGemini(text) {
   if (typeof fetch !== "function") {
     throw new Error("Global fetch is unavailable. Please use Node 18+ or add a fetch polyfill.");
