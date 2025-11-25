@@ -259,6 +259,33 @@ app.post("/api/sales", async (req, res) => {
   }
 });
 
+// Fetch sales rows from Postgres
+app.get("/api/sales", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date, brand, outlet, channel, orders, covers,
+              gross_sales AS "grossSales",
+              discounts,
+              net_sales AS "netSales",
+              vat,
+              delivery_fees AS "deliveryFees",
+              notes
+       FROM sales
+       ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch sales error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
 // Persist purchases rows into Postgres
 app.post("/api/purchases", async (req, res) => {
   if (!pool) {
@@ -328,6 +355,52 @@ app.post("/api/purchases", async (req, res) => {
   }
 });
 
+// Fetch purchases rows
+app.get("/api/purchases", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date, brand, outlet, supplier, category, item_name AS "itemName",
+              unit, quantity, unit_cost AS "unitCost", total_cost AS "totalCost",
+              invoice_no AS "invoiceNo", payment_term AS "paymentTerm", notes
+       FROM purchases
+       ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch purchases error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+// Fetch purchases rows
+app.get("/api/purchases", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date, brand, outlet, supplier, category, item_name AS "itemName",
+              unit, quantity, unit_cost AS "unitCost", total_cost AS "totalCost",
+              invoice_no AS "invoiceNo", payment_term AS "paymentTerm", notes
+       FROM purchases
+       ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch purchases error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
 // Persist waste rows into Postgres
 app.post("/api/waste", async (req, res) => {
   if (!pool) {
@@ -393,6 +466,52 @@ app.post("/api/waste", async (req, res) => {
   }
 });
 
+// Fetch waste rows
+app.get("/api/waste", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date, brand, outlet, category, item_name AS "itemName",
+              reason, quantity, unit, unit_cost AS "unitCost",
+              total_cost AS "totalCost", notes
+       FROM waste
+       ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch waste error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+// Fetch waste rows
+app.get("/api/waste", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date, brand, outlet, category, item_name AS "itemName",
+              reason, quantity, unit, unit_cost AS "unitCost",
+              total_cost AS "totalCost", notes
+       FROM waste
+       ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch waste error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
 // Persist HR / payroll rows into Postgres
 app.post("/api/hr-payroll", async (req, res) => {
   if (!pool) {
@@ -455,6 +574,54 @@ app.post("/api/hr-payroll", async (req, res) => {
   } catch (err) {
     console.error("Insert hr_payroll error:", err);
     res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+// Fetch HR / payroll rows
+app.get("/api/hr-payroll", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date, brand, outlet, employee_name AS "employeeName", role,
+              hours, hourly_rate AS "hourlyRate", base_pay AS "basePay",
+              overtime_pay AS "overtimePay", other_pay AS "otherPay",
+              labor_cost AS "laborCost", notes
+       FROM hr_payroll
+       ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch hr_payroll error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+// Fetch HR / payroll rows
+app.get("/api/hr-payroll", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date, brand, outlet, employee_name AS "employeeName", role,
+              hours, hourly_rate AS "hourlyRate", base_pay AS "basePay",
+              overtime_pay AS "overtimePay", other_pay AS "otherPay",
+              labor_cost AS "laborCost", notes
+       FROM hr_payroll
+       ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT 500`
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch hr_payroll error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
   }
 });
 
