@@ -189,7 +189,18 @@ function PurchasesEntry() {
     const { isValid, errorsByRow } = validateRows("purchases", rows);
     setErrorsByRow(errorsByRow);
     if (!isValid) {
-      setFormMessage("Please fix the highlighted fields before saving to database.");
+      const firstErrRow = Object.entries(errorsByRow).find(
+        ([, errs]) => errs && Object.keys(errs).length
+      );
+      if (firstErrRow) {
+        const [rowId, errs] = firstErrRow;
+        const fields = Object.keys(errs).join(", ");
+        setFormMessage(
+          `Please fill required numeric/text fields (${fields}) on row ${rowId}.`
+        );
+      } else {
+        setFormMessage("Please fix the highlighted fields before saving to database.");
+      }
       return;
     }
 
