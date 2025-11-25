@@ -582,6 +582,8 @@ function ReportsHub() {
       const res = await callAi({
         mode: "anomaly",
         payload: aiPayload,
+        question:
+          "Return markdown with sections: ## Anomalies (bullet list), ## Table (top 3 anomalies in a markdown table with Metric | Value | Why it matters), ## Risks (bullets), ## Actions (3-5 bullets). Keep it concise, numbers with currency/%.",
       });
       setAiAnomalyText(res.text || "");
       setResModel(res.model || null);
@@ -601,6 +603,8 @@ function ReportsHub() {
       const res = await callAi({
         mode: "actionPlan",
         payload: aiPayload,
+        question:
+          "Return markdown with sections: ## Quick Wins (3 bullets), ## Medium-term (3 bullets), ## Risks to watch (bullets), and a markdown table of 3 KPIs with Target | Current | Gap | Owner suggestion. Keep it concise and F&B oriented.",
       });
       setAiActionText(res.text || "");
       setResModel(res.model || null);
@@ -1037,6 +1041,7 @@ function ReportsHub() {
                   dataKey="sales"
                   name="Sales (JOD)"
                   stroke="#4f46e5"
+                  strokeWidth={2.4}
                   dot={false}
                 />
                 <Line
@@ -1044,6 +1049,7 @@ function ReportsHub() {
                   dataKey="ebitda"
                   name="EBITDA (JOD)"
                   stroke="#16a34a"
+                  strokeWidth={2.4}
                   dot={false}
                 />
               </LineChart>

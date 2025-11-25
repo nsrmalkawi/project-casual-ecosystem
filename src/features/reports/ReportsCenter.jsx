@@ -153,7 +153,7 @@ export default function ReportsCenter() {
           mode: "report",
           payload: { reportId: report.id, data },
           question:
-            "Provide a concise summary (key numbers) and 3-5 recommendations tailored to F&B ops. Format with bullets.",
+            "Return structured markdown with sections: ## Snapshot (key numbers), ## Table (include one markdown table with at least 3 KPIs), ## Risks (bullets), ## Recommended Actions (3-5 bullets). Keep it concise, F&B focused.",
         });
         setAiSummary(aiRes.text || "");
         setAiModel(aiRes.model || "");
@@ -200,7 +200,7 @@ export default function ReportsCenter() {
         mode: "report",
         payload: { scope: "full-system", summaries: results },
         question:
-          "Create a well-rounded F&B performance report with sections: Executive Summary, Sales, Labor, COGS/Purchases, Waste, Opex/Petty, Inventory, Risks, and 5 concrete Recommended Actions. Include key numbers (JOD) and percentages where available. Keep it concise and actionable.",
+          "Create structured markdown with sections: ## Executive Summary, ## Sales, ## Labor, ## COGS/Purchases, ## Waste, ## Opex/Petty, ## Inventory, ## Risks, ## Actions (5 bullets). Include at least two markdown tables (e.g., Sales vs Labor, Waste vs Purchases). Show key numbers with currency/%, concise and actionable.",
       });
 
       setFullReport(aiRes.text || "");
