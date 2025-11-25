@@ -66,6 +66,7 @@ export const OUTLET_OPTIONS = DEFAULT_OUTLETS;
 export const WASTE_REASON_OPTIONS = DEFAULT_WASTE_REASONS;
 export const PETTY_CASH_CATEGORY_OPTIONS = DEFAULT_PETTY_CASH_CATEGORIES;
 export const HR_ROLE_OPTIONS = DEFAULT_HR_ROLES;
+export const HR_ROLES = DEFAULT_HR_ROLES;
 
 // Aliases used by data-entry components
 export const BRANDS = DEFAULT_BRANDS;
