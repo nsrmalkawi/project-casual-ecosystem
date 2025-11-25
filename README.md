@@ -31,5 +31,8 @@ Frontend (Static Site)
 - Cloud snapshots: `POST/GET /api/snapshot`
 - In UI: Admin → Data Import/Export has download buttons (CSV/Excel) and snapshot save/load.
 
+## Reporting (example)
+- Sales summary: `GET /api/reports/sales-summary?from=YYYY-MM-DD&to=YYYY-MM-DD&brand=...&outlet=...`
+
 ## Mobile responsiveness
 The layout adapts under 900px: stacked panels, wrapped nav buttons, compressed padding, and horizontal scroll on tables.

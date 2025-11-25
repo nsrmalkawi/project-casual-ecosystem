@@ -73,6 +73,60 @@ const EXPORTABLE_TABLES = new Set([
   "petty_cash",
 ]);
 
+// --- Simple reporting endpoints ---
+// Sales summary by brand/outlet/date range
+app.get("/api/reports/sales-summary", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { from, to, brand, outlet } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (from) {
+    filters.push(`date >= $${idx++}`);
+    params.push(from);
+  }
+  if (to) {
+    filters.push(`date <= $${idx++}`);
+    params.push(to);
+  }
+  if (brand) {
+    filters.push(`brand = $${idx++}`);
+    params.push(brand);
+  }
+  if (outlet) {
+    filters.push(`outlet = $${idx++}`);
+    params.push(outlet);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          COALESCE(SUM(gross_sales),0) AS grossSales,
+          COALESCE(SUM(net_sales),0)   AS netSales,
+          COALESCE(SUM(discounts),0)   AS discounts,
+          COALESCE(SUM(orders),0)      AS orders,
+          COALESCE(SUM(covers),0)      AS covers
+        FROM sales
+        ${where}
+      `,
+      params
+    );
+    res.json({ ok: true, summary: rows[0] || {} });
+  } catch (err) {
+    console.error("Sales summary error:", err);
+    res.status(500).json({ error: "REPORT_FAILED", message: err.message });
+  }
+});
+
 async function callGemini(text) {
   if (typeof fetch !== "function") {
     throw new Error("Global fetch is unavailable. Please use Node 18+ or add a fetch polyfill.");
