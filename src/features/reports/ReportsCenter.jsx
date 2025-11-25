@@ -483,14 +483,6 @@ export default function ReportsCenter() {
                   gap: 10,
                 }}
               >
-                <div className="card" style={{ background: "#f8fafc" }}>
-                  <div className="page-subtitle">Raw response (truncated)</div>
-                  <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 260, overflow: "auto" }}>
-{JSON.stringify(preview, null, 2).slice(0, 5000)}
-{preview && JSON.stringify(preview, null, 2).length > 5000 ? "\n...truncated..." : ""}
-                  </pre>
-                </div>
-
                 <div className="card" style={{ background: "#fdf2f8" }}>
                   <div className="page-subtitle">AI summary & recommendations</div>
                   {aiSummary ? (
