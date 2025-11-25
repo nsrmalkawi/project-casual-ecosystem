@@ -300,6 +300,153 @@ app.get("/api/reports/hr-summary", async (req, res) => {
   }
 });
 
+// Rent/Opex summary
+app.get("/api/reports/rent-opex-summary", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { from, to, brand, outlet, category } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (from) {
+    filters.push(`date >= $${idx++}`);
+    params.push(from);
+  }
+  if (to) {
+    filters.push(`date <= $${idx++}`);
+    params.push(to);
+  }
+  if (brand) {
+    filters.push(`brand = $${idx++}`);
+    params.push(brand);
+  }
+  if (outlet) {
+    filters.push(`outlet = $${idx++}`);
+    params.push(outlet);
+  }
+  if (category) {
+    filters.push(`category = $${idx++}`);
+    params.push(category);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT COALESCE(SUM(amount),0) AS amount
+        FROM rent_opex
+        ${where}
+      `,
+      params
+    );
+    res.json({ ok: true, summary: rows[0] || {} });
+  } catch (err) {
+    console.error("Rent/opex summary error:", err);
+    res.status(500).json({ error: "REPORT_FAILED", message: err.message });
+  }
+});
+
+// Petty cash summary
+app.get("/api/reports/petty-cash-summary", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { from, to, brand, outlet, category } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (from) {
+    filters.push(`date >= $${idx++}`);
+    params.push(from);
+  }
+  if (to) {
+    filters.push(`date <= $${idx++}`);
+    params.push(to);
+  }
+  if (brand) {
+    filters.push(`brand = $${idx++}`);
+    params.push(brand);
+  }
+  if (outlet) {
+    filters.push(`outlet = $${idx++}`);
+    params.push(outlet);
+  }
+  if (category) {
+    filters.push(`category = $${idx++}`);
+    params.push(category);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT COALESCE(SUM(amount),0) AS amount
+        FROM petty_cash
+        ${where}
+      `,
+      params
+    );
+    res.json({ ok: true, summary: rows[0] || {} });
+  } catch (err) {
+    console.error("Petty cash summary error:", err);
+    res.status(500).json({ error: "REPORT_FAILED", message: err.message });
+  }
+});
+
+// Inventory summary (counts items, optional category/brand filters)
+app.get("/api/reports/inventory-summary", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { category, brand } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (category) {
+    filters.push(`category = $${idx++}`);
+    params.push(category);
+  }
+  if (brand) {
+    filters.push(`brand = $${idx++}`);
+    params.push(brand);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          COUNT(*) AS itemCount,
+          COALESCE(SUM(current_qty),0) AS totalQty,
+          COALESCE(AVG(last_cost),0) AS avgLastCost
+        FROM inventory_items
+        ${where}
+      `,
+      params
+    );
+    res.json({ ok: true, summary: rows[0] || {} });
+  } catch (err) {
+    console.error("Inventory summary error:", err);
+    res.status(500).json({ error: "REPORT_FAILED", message: err.message });
+  }
+});
+
 
 async function callGemini(text) {
   if (typeof fetch !== "function") {

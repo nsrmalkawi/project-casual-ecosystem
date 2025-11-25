@@ -36,6 +36,9 @@ Frontend (Static Site)
 - Purchases summary: `GET /api/reports/purchases-summary?from=...&to=...&brand=...&outlet=...&supplier=...&category=...`
 - Waste summary: `GET /api/reports/waste-summary?from=...&to=...&brand=...&outlet=...&category=...&reason=...`
 - HR summary: `GET /api/reports/hr-summary?from=...&to=...&brand=...&outlet=...&role=...`
+- Rent/Opex summary: `GET /api/reports/rent-opex-summary?from=...&to=...&brand=...&outlet=...&category=...`
+- Petty Cash summary: `GET /api/reports/petty-cash-summary?from=...&to=...&brand=...&outlet=...&category=...`
+- Inventory summary: `GET /api/reports/inventory-summary?category=...&brand=...`
 
 ## Mobile responsiveness
 The layout adapts under 900px: stacked panels, wrapped nav buttons, compressed padding, and horizontal scroll on tables.
