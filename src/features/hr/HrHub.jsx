@@ -109,6 +109,7 @@ function HrHub() {
   const [sopLoading, setSopLoading] = useState(false);
   const [sopError, setSopError] = useState("");
   const [sopForm, setSopForm] = useState({ employeeId: "", sopId: "" });
+  const [sopNew, setSopNew] = useState({ title: "", description: "", category: "", effectiveDate: "" });
 
   // Labor KPI
   const [kpiLoading, setKpiLoading] = useState(false);
@@ -286,6 +287,32 @@ function HrHub() {
     loadSops();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function createSop() {
+    setSopError("");
+    if (!sopNew.title || !sopNew.category) {
+      setSopError("Title and category are required for SOP.");
+      return;
+    }
+    try {
+      setSopLoading(true);
+      const resp = await fetch(`${API_BASE}/api/hr/sops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sopNew),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Create SOP failed: ${resp.status} ${text}`);
+      }
+      setSopNew({ title: "", description: "", category: "", effectiveDate: "" });
+      loadSops();
+    } catch (err) {
+      setSopError(err.message || "Failed to create SOP");
+    } finally {
+      setSopLoading(false);
+    }
+  }
 
   async function assignSop(status = "Assigned") {
     setSopError("");
@@ -864,6 +891,55 @@ function HrHub() {
     <div className="card">
       <h3 className="card-title">SOP & Training</h3>
       <Info text="Assign SOPs to employees and capture acknowledgments. Everything stays in-app (no popups)." />
+
+      <div className="card" style={{ border: "1px dashed #cbd5e1", marginBottom: 12 }}>
+        <h4 className="card-title">Create new SOP</h4>
+        <div className="form-grid">
+          <label>
+            Title*
+            <input
+              value={sopNew.title}
+              onChange={(e) => setSopNew((f) => ({ ...f, title: e.target.value }))}
+            />
+          </label>
+          <label>
+            Category*
+            <input
+              value={sopNew.category}
+              onChange={(e) => setSopNew((f) => ({ ...f, category: e.target.value }))}
+            />
+          </label>
+          <label>
+            Effective date
+            <input
+              type="date"
+              value={sopNew.effectiveDate}
+              onChange={(e) => setSopNew((f) => ({ ...f, effectiveDate: e.target.value }))}
+            />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            Description
+            <textarea
+              rows={2}
+              value={sopNew.description}
+              onChange={(e) => setSopNew((f) => ({ ...f, description: e.target.value }))}
+            />
+          </label>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button type="button" className="primary-btn" onClick={createSop} disabled={sopLoading}>
+            Save SOP
+          </button>
+          <button
+            type="button"
+            className="secondary-btn"
+            onClick={() => setSopNew({ title: "", description: "", category: "", effectiveDate: "" })}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
       <div className="form-grid" style={{ marginTop: 8 }}>
         <label>
           Employee
