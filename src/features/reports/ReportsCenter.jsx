@@ -35,6 +35,27 @@ async function fetchJson(url) {
   return resp.json();
 }
 
+function SummaryTile({ label, value, color = "#4f46e5", loading }) {
+  const num = Number(value);
+  return (
+    <div
+      className="card"
+      style={{
+        padding: 10,
+        borderLeft: `4px solid ${color}`,
+        background: "#f8fafc",
+      }}
+    >
+      <div className="page-subtitle" style={{ marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 700 }}>
+        {loading ? "…" : Number.isFinite(num) ? num.toLocaleString() : value || "-"}
+      </div>
+    </div>
+  );
+}
+
 function ReportCard({ report, onOpen }) {
   const icon = ICON_MAP[report.icon] || ICON_MAP[report.iconOverride] || report.icon || "📊";
   return (
@@ -101,6 +122,9 @@ function ReportCard({ report, onOpen }) {
 export default function ReportsCenter() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
+  const [totals, setTotals] = useState({});
+  const [totalsLoading, setTotalsLoading] = useState(false);
+  const [totalsError, setTotalsError] = useState("");
   const [selected, setSelected] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -130,6 +154,41 @@ export default function ReportsCenter() {
         return matchesCategory && matchesQuery;
       });
   }, [query, category, iconOverrides]);
+
+  // NEW: totals cards (cloud summaries)
+  useEffect(() => {
+    if (!API_BASE) return;
+    const load = async () => {
+      setTotalsLoading(true);
+      setTotalsError("");
+      try {
+        const endpoints = [
+          { key: "sales", path: "/api/reports/sales-summary" },
+          { key: "purchases", path: "/api/reports/purchases-summary" },
+          { key: "waste", path: "/api/reports/waste-summary" },
+          { key: "hr", path: "/api/reports/hr-summary" },
+          { key: "rent", path: "/api/reports/rent-opex-summary" },
+          { key: "petty", path: "/api/reports/petty-cash-summary" },
+          { key: "inventory", path: "/api/reports/inventory-summary" },
+        ];
+        const result = {};
+        for (const ep of endpoints) {
+          try {
+            const data = await fetchJson(`${API_BASE}${ep.path}`);
+            result[ep.key] = data?.summary || {};
+          } catch (e) {
+            result[ep.key] = { error: e.message };
+          }
+        }
+        setTotals(result);
+      } catch (e) {
+        setTotalsError(e.message || "Failed to load summaries");
+      } finally {
+        setTotalsLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const handleOpen = async (report) => {
     setSelected(report);
@@ -218,6 +277,31 @@ export default function ReportsCenter() {
       <p className="page-subtitle">
         Quick navigation to reporting and KPI endpoints. Use filters to find the report you need.
       </p>
+
+      {/* NEW: summary cards from cloud */}
+      <div
+        className="card"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        {totalsError ? (
+          <div style={{ color: "#b91c1c" }}>{totalsError}</div>
+        ) : (
+          <>
+            <SummaryTile label="Net sales" value={totals.sales?.netsales || totals.sales?.netSales} color="#4f46e5" loading={totalsLoading} />
+            <SummaryTile label="Purchases" value={totals.purchases?.totalcost || totals.purchases?.totalCost} color="#f97316" loading={totalsLoading} />
+            <SummaryTile label="Waste cost" value={totals.waste?.totalcost || totals.waste?.totalCost} color="#dc2626" loading={totalsLoading} />
+            <SummaryTile label="Labor cost" value={totals.hr?.laborcost || totals.hr?.laborCost} color="#0ea5e9" loading={totalsLoading} />
+            <SummaryTile label="Rent / Opex" value={totals.rent?.amount} color="#10b981" loading={totalsLoading} />
+            <SummaryTile label="Petty cash" value={totals.petty?.amount} color="#8b5cf6" loading={totalsLoading} />
+            <SummaryTile label="Inventory items" value={totals.inventory?.itemcount || totals.inventory?.itemCount} color="#9333ea" loading={totalsLoading} />
+          </>
+        )}
+      </div>
 
       <div
         style={{
