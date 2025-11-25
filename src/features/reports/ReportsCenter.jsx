@@ -1,6 +1,7 @@
 ﻿// NEW: Reports & KPI Center
 import { useEffect, useMemo, useState } from "react";
 import { callAi } from "../../utils/aiClient";
+import { marked } from "marked";
 import { loadData } from "../../utils/storage";
 import { reportsConfig } from "../../config/reportsConfig";
 
@@ -54,6 +55,12 @@ function SummaryTile({ label, value, color = "#4f46e5", loading }) {
       </div>
     </div>
   );
+}
+
+function renderMarkdown(md) {
+  if (!md) return "";
+  marked.setOptions({ mangle: false, headerIds: false });
+  return marked.parse(md);
 }
 
 function ReportCard({ report, onOpen }) {
@@ -370,19 +377,17 @@ export default function ReportsCenter() {
             <div
               style={{
                 marginTop: 8,
-                whiteSpace: "pre-wrap",
                 background: "#f8fafc",
                 padding: 10,
                 borderRadius: 8,
                 border: "1px solid #e5e7eb",
                 fontSize: 13,
               }}
-            >
-              {fullReport}
-              {fullReportModel && (
-                <div style={{ fontSize: 11, color: "#475569", marginTop: 6 }}>Model: {fullReportModel}</div>
-              )}
-            </div>
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(fullReport) }}
+            />
+          )}
+          {fullReportModel && fullReport && (
+            <div style={{ fontSize: 11, color: "#475569", marginTop: 6 }}>Model: {fullReportModel}</div>
           )}
         </div>
       )}
@@ -486,7 +491,10 @@ export default function ReportsCenter() {
                 <div className="card" style={{ background: "#fdf2f8" }}>
                   <div className="page-subtitle">AI summary & recommendations</div>
                   {aiSummary ? (
-                    <div style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{aiSummary}</div>
+                    <div
+                      style={{ fontSize: 13 }}
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(aiSummary) }}
+                    />
                   ) : (
                     <div style={{ fontSize: 12, color: "#64748b" }}>
                       {aiStatus === "loading" ? "Summarizing..." : fallbackSummary(preview.summary) || "No AI summary yet."}
