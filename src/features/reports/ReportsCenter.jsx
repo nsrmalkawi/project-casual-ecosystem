@@ -1,5 +1,29 @@
 // NEW: Reports & KPI Center
 import { useMemo, useState } from "react";
+import { callAi } from "../../utils/aiClient";
+
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  (typeof window !== "undefined" ? window.location.origin : "");
+
+// NEW: map icon ids to friendly glyphs to avoid text overlay
+const ICON_MAP = {
+  bar_chart: "📊",
+  line_chart: "📈",
+  pie_chart: "🧮",
+  labor: "👥",
+  waste: "🗑️",
+  finance: "💵",
+  inventory: "📦",
+};
+
+function fallbackSummary(summary) {
+  if (!summary) return "";
+  const entries = Object.entries(summary)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(", ");
+  return entries ? `Summary: ${entries}` : "";
+}
 import { reportsConfig } from "../../config/reportsConfig";
 
 function ReportCard({ report, onOpen }) {
@@ -24,7 +48,7 @@ function ReportCard({ report, onOpen }) {
           }}
         >
           {/* NEW: safe default icon for report cards */}
-          {report.icon || "📊"}
+          {ICON_MAP[report.icon] || report.icon || "📊"}
         </span>
         <div>
           <div style={{ fontWeight: 600 }}>{report.title}</div>
@@ -68,6 +92,13 @@ function ReportCard({ report, onOpen }) {
 export default function ReportsCenter() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiModel, setAiModel] = useState("");
+  const [aiStatus, setAiStatus] = useState("idle");
 
   const categories = useMemo(() => {
     const set = new Set(reportsConfig.map((r) => r.category).filter(Boolean));
@@ -84,15 +115,44 @@ export default function ReportsCenter() {
     });
   }, [query, category]);
 
-  const handleOpen = (report) => {
-    // NEW: if the report references a tab, use event-based navigation, otherwise open the route
-    if (report.route?.startsWith("#tab:")) {
-      const tabId = report.route.replace("#tab:", "");
-      window.dispatchEvent(new CustomEvent("pc:navigate", { detail: tabId }));
-      return;
-    }
-    if (report.route) {
-      window.open(report.route, "_blank");
+  const handleOpen = async (report) => {
+    setSelected(report);
+    setPreview(null);
+    setAiSummary("");
+    setAiModel("");
+    setError("");
+    setAiStatus("idle");
+
+    // In-app fetch to avoid opening a new tab/blank page.
+    if (!API_BASE || !report.route) return;
+    setLoading(true);
+    try {
+      const resp = await fetch(`${API_BASE}${report.route}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      setPreview(data);
+
+      // Try a quick AI summary of the payload
+      try {
+        setAiStatus("loading");
+        const aiRes = await callAi({
+          mode: "report",
+          payload: { reportId: report.id, data },
+          question:
+            "Summarize the key numbers and give 3 recommendations in bullet points. Keep it concise.",
+        });
+        setAiSummary(aiRes.text || "");
+        setAiModel(aiRes.model || "");
+        setAiStatus("done");
+      } catch (aiErr) {
+        console.warn("AI summary failed", aiErr);
+        setAiStatus("error");
+      }
+    } catch (err) {
+      console.error("Report preview error", err);
+      setError(err.message || "Failed to load report.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -160,6 +220,110 @@ export default function ReportsCenter() {
           </div>
         )}
       </div>
+
+      {/* NEW: Inline preview + AI summary to avoid new tab / blank screen */}
+      {selected && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <div>
+              <h3 className="card-title" style={{ marginBottom: 2 }}>
+                {selected.title} — inline preview
+              </h3>
+              <div className="page-subtitle" style={{ margin: 0 }}>
+                {selected.description}
+              </div>
+            </div>
+            <button type="button" className="secondary-btn" onClick={() => setSelected(null)}>
+              Close preview
+            </button>
+          </div>
+
+          {loading && <div style={{ marginTop: 8 }}>Loading...</div>}
+          {error && <div style={{ color: "#b91c1c", marginTop: 8 }}>{error}</div>}
+
+          {!loading && !error && preview && (
+            <>
+              {/* NEW: quick visual KPIs when summary is present */}
+              {preview.summary && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                    gap: 10,
+                    marginTop: 10,
+                  }}
+                >
+                  {Object.entries(preview.summary).map(([k, v]) => {
+                    const num = Number(v);
+                    return (
+                      <div key={k} className="card">
+                        <div className="page-subtitle" style={{ textTransform: "capitalize" }}>
+                          {k}
+                        </div>
+                        <div style={{ fontSize: 18, fontWeight: 700 }}>{Number.isFinite(num) ? num.toLocaleString() : v}</div>
+                        {Number.isFinite(num) && (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              height: 6,
+                              borderRadius: 999,
+                              background: "#e5e7eb",
+                              position: "relative",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: `${Math.min(100, Math.abs(num))}%`,
+                                background: "#4f46e5",
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div
+                style={{
+                  marginTop: 10,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: 10,
+                }}
+              >
+                <div className="card" style={{ background: "#f8fafc" }}>
+                  <div className="page-subtitle">Raw response (truncated)</div>
+                  <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 260, overflow: "auto" }}>
+{JSON.stringify(preview, null, 2).slice(0, 5000)}
+{preview && JSON.stringify(preview, null, 2).length > 5000 ? "\n...truncated..." : ""}
+                  </pre>
+                </div>
+
+                <div className="card" style={{ background: "#fdf2f8" }}>
+                  <div className="page-subtitle">AI summary & recommendations</div>
+                  {aiSummary ? (
+                    <div style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{aiSummary}</div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      {aiStatus === "loading"
+                        ? "Summarizing..."
+                        : fallbackSummary(preview.summary) || "No AI summary yet."}
+                    </div>
+                  )}
+                  {aiModel && <div style={{ fontSize: 11, color: "#475569", marginTop: 6 }}>Model: {aiModel}</div>}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
