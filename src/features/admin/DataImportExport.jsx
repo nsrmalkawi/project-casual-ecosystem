@@ -43,6 +43,17 @@ export default function DataImportExport() {
   const apiUrl = (path) =>
     API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
 
+  const TABLE_ICONS = {
+    sales: "📊",
+    purchases: "🧾",
+    waste: "🗑️",
+    recipe_waste: "🍳",
+    inventory_items: "📦",
+    rent_opex: "🏢",
+    hr_payroll: "👥",
+    petty_cash: "💵",
+  };
+
   const TABLES = [
     { id: "sales", label: "Sales" },
     { id: "purchases", label: "Purchases" },
@@ -249,7 +260,10 @@ export default function DataImportExport() {
         >
           {TABLES.map((t) => (
             <div key={t.id} className="card" style={{ padding: 12 }}>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>{t.label}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, fontWeight: 600 }}>
+                <span style={{ fontSize: 18 }}>{TABLE_ICONS[t.id] || "📁"}</span>
+                <span>{t.label}</span>
+              </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
                   type="button"
