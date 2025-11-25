@@ -1,5 +1,5 @@
 // src/features/reports/ReportsHub.jsx
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { marked } from "marked";
 import {
   BarChart,
@@ -18,6 +18,10 @@ import AlertsSummaryBox from "./AlertsSummaryBox";
 import { callAi } from "../../utils/aiClient";
 import { useData } from "../../DataContext";
 
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  (typeof window !== "undefined" ? window.location.origin : "");
+
 function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -26,6 +30,12 @@ function safeNumber(v) {
 function percent(n) {
   if (!Number.isFinite(n)) return "0.0%";
   return (n * 100).toFixed(1) + "%";
+}
+
+function money(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "-";
+  return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 function renderMarkdown(md) {
@@ -72,6 +82,19 @@ function ReportsHub() {
   const [rentOpex] = useState(() => loadData("pc_rent_opex", []) || []);
   const [hr] = useState(() => loadData("pc_hr_labor", []) || []);
   const [pettyCash] = useState(() => loadData("pc_petty_cash", []) || []);
+
+  // NEW: live summaries from backend reports endpoints
+  const [liveSummaries, setLiveSummaries] = useState({
+    sales: null,
+    purchases: null,
+    waste: null,
+    hr: null,
+    rent: null,
+    petty: null,
+    inventory: null,
+  });
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState("");
 
   // --------- Filters (global) ---------
   const {
@@ -138,6 +161,72 @@ function ReportsHub() {
     () => pettyCash.filter((r) => passesFilters(r)),
     [pettyCash, brandFilter, outletFilter, startDate, endDate]
   );
+
+  // NEW: helper to render a live summary tile
+  const LiveTile = ({ title, value, sub, loading }) => (
+    <div className="card" style={{ padding: 12, minHeight: 90 }}>
+      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 22, fontWeight: 700 }}>
+        {loading ? "..." : money(value)}
+      </div>
+      {sub && <div style={{ fontSize: 12, color: "#6b7280" }}>{sub}</div>}
+    </div>
+  );
+
+  // NEW: fetch cloud summaries using current filters
+  useEffect(() => {
+    if (!API_BASE) return;
+    const controller = new AbortController();
+    async function load() {
+      setLiveLoading(true);
+      setLiveError("");
+      const qs = new URLSearchParams();
+      if (startDate) qs.set("from", startDate);
+      if (endDate) qs.set("to", endDate);
+      if (brandFilter) qs.set("brand", brandFilter);
+      if (outletFilter) qs.set("outlet", outletFilter);
+      const fetchOne = async (key, path) => {
+        try {
+          const resp = await fetch(`${API_BASE}${path}?${qs.toString()}`, {
+            signal: controller.signal,
+          });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const data = await resp.json();
+          return data;
+        } catch (e) {
+          throw new Error(`${key} failed: ${e.message}`);
+        }
+      };
+      try {
+        const [salesResp, purchasesResp, wasteResp, hrResp, rentResp, pettyResp, invResp] =
+          await Promise.all([
+            fetchOne("sales", "/api/reports/sales-summary"),
+            fetchOne("purchases", "/api/reports/purchases-summary"),
+            fetchOne("waste", "/api/reports/waste-summary"),
+            fetchOne("hr", "/api/reports/hr-summary"),
+            fetchOne("rent", "/api/reports/rent-opex-summary"),
+            fetchOne("petty", "/api/reports/petty-cash-summary"),
+            fetchOne("inventory", "/api/reports/inventory-summary"),
+          ]);
+        setLiveSummaries({
+          sales: salesResp?.summary || null,
+          purchases: purchasesResp?.summary || null,
+          waste: wasteResp?.summary || null,
+          hr: hrResp?.summary || null,
+          rent: rentResp?.summary || null,
+          petty: pettyResp?.summary || null,
+          inventory: invResp?.summary || null,
+        });
+      } catch (err) {
+        console.error("Live reports load error", err);
+        setLiveError(err.message || "Failed to load reports");
+      } finally {
+        setLiveLoading(false);
+      }
+    }
+    load();
+    return () => controller.abort();
+  }, [brandFilter, outletFilter, startDate, endDate]);
 
   // --------- KPI summary (including EBITDA) ---------
   const kpis = useMemo(() => {
@@ -588,6 +677,81 @@ function ReportsHub() {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* NEW: Live cloud summaries from API (matches Reports Center) */}
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div>
+            <h3 className="card-title" style={{ marginBottom: 4 }}>
+              Live cloud snapshots
+            </h3>
+            <p className="page-subtitle" style={{ margin: 0 }}>
+              Pulled directly from the backend using your filters. Use this to verify cloud vs local data.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="secondary-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent("pc:navigate", { detail: "reports" }))}
+          >
+            Open Reports & KPI Center
+          </button>
+        </div>
+        {liveError && (
+          <div style={{ color: "#b91c1c", fontSize: 12, marginTop: 6 }}>{liveError}</div>
+        )}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: 10,
+            marginTop: 10,
+          }}
+        >
+          <LiveTile
+            title="Net sales"
+            value={liveSummaries.sales?.netsales || liveSummaries.sales?.netSales}
+            sub={brandFilter || outletFilter ? "Filtered scope" : "All data"}
+            loading={liveLoading}
+          />
+          <LiveTile
+            title="Purchases"
+            value={liveSummaries.purchases?.totalcost || liveSummaries.purchases?.totalCost}
+            sub="COGS / suppliers"
+            loading={liveLoading}
+          />
+          <LiveTile
+            title="Waste"
+            value={liveSummaries.waste?.totalcost || liveSummaries.waste?.totalCost}
+            sub="Waste cost"
+            loading={liveLoading}
+          />
+          <LiveTile
+            title="Labor cost"
+            value={liveSummaries.hr?.laborcost || liveSummaries.hr?.laborCost}
+            sub="HR / payroll"
+            loading={liveLoading}
+          />
+          <LiveTile
+            title="Rent & opex"
+            value={liveSummaries.rent?.amount}
+            sub="Operating expenses"
+            loading={liveLoading}
+          />
+          <LiveTile
+            title="Petty cash"
+            value={liveSummaries.petty?.amount}
+            sub="Petty & misc"
+            loading={liveLoading}
+          />
+          <LiveTile
+            title="Inventory items"
+            value={liveSummaries.inventory?.itemcount || liveSummaries.inventory?.itemCount}
+            sub="Active SKUs"
+            loading={liveLoading}
           />
         </div>
       </div>

@@ -23,6 +23,7 @@ function ReportCard({ report, onOpen }) {
             fontWeight: 700,
           }}
         >
+          {/* NEW: safe default icon for report cards */}
           {report.icon || "📊"}
         </span>
         <div>
@@ -84,7 +85,7 @@ export default function ReportsCenter() {
   }, [query, category]);
 
   const handleOpen = (report) => {
-    // If route matches a known app tab, navigate; otherwise open the route directly
+    // NEW: if the report references a tab, use event-based navigation, otherwise open the route
     if (report.route?.startsWith("#tab:")) {
       const tabId = report.route.replace("#tab:", "");
       window.dispatchEvent(new CustomEvent("pc:navigate", { detail: tabId }));

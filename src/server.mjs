@@ -71,7 +71,49 @@ const EXPORTABLE_TABLES = new Set([
   "rent_opex",
   "hr_payroll",
   "petty_cash",
+  // NEW: HR exports
+  "hr_employees",
+  "hr_attendance",
+  "hr_assessments",
+  "hr_sops",
+  "hr_employee_sops",
 ]);
+
+// NEW: HR helpers for attendance/labor cost
+const STANDARD_DAILY_HOURS = 8;
+const STANDARD_MONTHLY_HOURS = 173.33; // ~40h/week * 52 / 12
+
+function parseTimeToMinutes(str) {
+  if (!str) return null;
+  const [h, m] = String(str).split(":").map((n) => Number(n));
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function computeHours({ startTime, endTime, totalHours, overtimeHours }) {
+  let total = Number(totalHours) || 0;
+  let overtime = Number(overtimeHours) || 0;
+
+  const startMin = parseTimeToMinutes(startTime);
+  const endMin = parseTimeToMinutes(endTime);
+  if (startMin != null && endMin != null && endMin >= startMin) {
+    const diff = (endMin - startMin) / 60;
+    total = diff;
+    overtime = Math.max(0, diff - STANDARD_DAILY_HOURS);
+  }
+
+  return { total, overtime };
+}
+
+function deriveHourlyRate({ hourlyRate, monthlySalary }) {
+  const hourly = Number(hourlyRate);
+  if (!Number.isNaN(hourly) && hourly > 0) return hourly;
+  const monthly = Number(monthlySalary);
+  if (!Number.isNaN(monthly) && monthly > 0) {
+    return monthly / STANDARD_MONTHLY_HOURS;
+  }
+  return 0;
+}
 
 // --- Simple reporting endpoints ---
 // Sales summary by brand/outlet/date range
@@ -1174,6 +1216,669 @@ app.get("/api/hr-payroll", async (_req, res) => {
   } catch (err) {
     console.error("Fetch hr_payroll error:", err);
     res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+// NEW: HR employees CRUD
+app.get("/api/hr/employees", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { q, outlet, status } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (q) {
+    filters.push(
+      `(LOWER(name) LIKE $${idx} OR LOWER(employee_id) LIKE $${idx} OR LOWER(role) LIKE $${idx})`
+    );
+    params.push(`%${q.toLowerCase()}%`);
+    idx += 1;
+  }
+  if (outlet) {
+    filters.push(`outlet = $${idx++}`);
+    params.push(outlet);
+  }
+  if (status) {
+    filters.push(`status = $${idx++}`);
+    params.push(status);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          employee_id AS "employeeId",
+          name,
+          role,
+          outlet,
+          status,
+          start_date AS "startDate",
+          hourly_rate AS "hourlyRate",
+          monthly_salary AS "monthlySalary",
+          overtime_rate AS "overtimeRate",
+          contact,
+          notes,
+          created_at AS "createdAt"
+        FROM hr_employees
+        ${where}
+        ORDER BY name ASC NULLS LAST
+        LIMIT 500
+      `,
+      params
+    );
+    res.json({ ok: true, records: rows });
+  } catch (err) {
+    console.error("Fetch hr_employees error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/hr/employees", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const {
+    employeeId,
+    name,
+    role,
+    outlet,
+    status = "Active",
+    startDate,
+    hourlyRate,
+    monthlySalary,
+    overtimeRate,
+    contact,
+    notes,
+  } = req.body || {};
+
+  if (!name || !role || !outlet) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `
+        INSERT INTO hr_employees (
+          employee_id, name, role, outlet, status, start_date,
+          hourly_rate, monthly_salary, overtime_rate, contact, notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        RETURNING id
+      `,
+      [
+        employeeId || null,
+        name,
+        role,
+        outlet,
+        status,
+        startDate || null,
+        hourlyRate || null,
+        monthlySalary || null,
+        overtimeRate || null,
+        contact || null,
+        notes || null,
+      ]
+    );
+    res.json({ ok: true, id: rows[0]?.id });
+  } catch (err) {
+    console.error("Insert hr_employees error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+app.put("/api/hr/employees/:id", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const id = req.params.id;
+  const {
+    employeeId,
+    name,
+    role,
+    outlet,
+    status,
+    startDate,
+    hourlyRate,
+    monthlySalary,
+    overtimeRate,
+    contact,
+    notes,
+  } = req.body || {};
+
+  try {
+    await pool.query(
+      `
+        UPDATE hr_employees
+        SET employee_id=$1, name=$2, role=$3, outlet=$4, status=$5, start_date=$6,
+            hourly_rate=$7, monthly_salary=$8, overtime_rate=$9, contact=$10, notes=$11
+        WHERE id=$12
+      `,
+      [
+        employeeId || null,
+        name || null,
+        role || null,
+        outlet || null,
+        status || null,
+        startDate || null,
+        hourlyRate || null,
+        monthlySalary || null,
+        overtimeRate || null,
+        contact || null,
+        notes || null,
+        id,
+      ]
+    );
+    res.json({ ok: true, id });
+  } catch (err) {
+    console.error("Update hr_employees error:", err);
+    res.status(500).json({ error: "UPDATE_FAILED", message: err.message });
+  }
+});
+
+// NEW: HR attendance CRUD + labor KPI
+app.get("/api/hr/attendance", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { from, to, outlet, employeeId } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (from) {
+    filters.push(`a.date >= $${idx++}`);
+    params.push(from);
+  }
+  if (to) {
+    filters.push(`a.date <= $${idx++}`);
+    params.push(to);
+  }
+  if (outlet) {
+    filters.push(`a.outlet = $${idx++}`);
+    params.push(outlet);
+  }
+  if (employeeId) {
+    filters.push(`a.employee_id = $${idx++}`);
+    params.push(employeeId);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          a.id,
+          a.date,
+          a.employee_id AS "employeeId",
+          e.name AS "employeeName",
+          COALESCE(a.outlet, e.outlet) AS outlet,
+          a.start_time AS "startTime",
+          a.end_time AS "endTime",
+          a.total_hours AS "totalHours",
+          a.overtime_hours AS "overtimeHours",
+          a.notes,
+          a.created_at AS "createdAt"
+        FROM hr_attendance a
+        LEFT JOIN hr_employees e ON e.id = a.employee_id
+        ${where}
+        ORDER BY a.date DESC NULLS LAST, a.created_at DESC NULLS LAST
+        LIMIT 500
+      `,
+      params
+    );
+    res.json({ ok: true, records: rows });
+  } catch (err) {
+    console.error("Fetch hr_attendance error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/hr/attendance", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { date, employeeId, outlet, startTime, endTime, totalHours, overtimeHours, notes } =
+    req.body || {};
+
+  if (!date || !employeeId) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  const { total, overtime } = computeHours({ startTime, endTime, totalHours, overtimeHours });
+
+  try {
+    const { rows } = await pool.query(
+      `
+        INSERT INTO hr_attendance (
+          date, employee_id, outlet, start_time, end_time,
+          total_hours, overtime_hours, notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        RETURNING id
+      `,
+      [
+        date,
+        employeeId,
+        outlet || null,
+        startTime || null,
+        endTime || null,
+        total,
+        overtime,
+        notes || null,
+      ]
+    );
+    res.json({ ok: true, id: rows[0]?.id });
+  } catch (err) {
+    console.error("Insert hr_attendance error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+app.put("/api/hr/attendance/:id", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const id = req.params.id;
+  const { date, employeeId, outlet, startTime, endTime, totalHours, overtimeHours, notes } =
+    req.body || {};
+
+  const { total, overtime } = computeHours({ startTime, endTime, totalHours, overtimeHours });
+
+  try {
+    await pool.query(
+      `
+        UPDATE hr_attendance
+        SET date=$1, employee_id=$2, outlet=$3, start_time=$4, end_time=$5,
+            total_hours=$6, overtime_hours=$7, notes=$8
+        WHERE id=$9
+      `,
+      [
+        date || null,
+        employeeId || null,
+        outlet || null,
+        startTime || null,
+        endTime || null,
+        total,
+        overtime,
+        notes || null,
+        id,
+      ]
+    );
+    res.json({ ok: true, id });
+  } catch (err) {
+    console.error("Update hr_attendance error:", err);
+    res.status(500).json({ error: "UPDATE_FAILED", message: err.message });
+  }
+});
+
+app.get("/api/hr/labor-kpi", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { from, to, outlet } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (from) {
+    filters.push(`a.date >= $${idx++}`);
+    params.push(from);
+  }
+  if (to) {
+    filters.push(`a.date <= $${idx++}`);
+    params.push(to);
+  }
+  if (outlet) {
+    filters.push(`COALESCE(a.outlet, e.outlet) = $${idx++}`);
+    params.push(outlet);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          COALESCE(a.outlet, e.outlet) AS outlet,
+          a.employee_id AS "employeeId",
+          e.name AS "employeeName",
+          SUM(a.total_hours) AS "totalHours",
+          SUM(a.overtime_hours) AS "overtimeHours",
+          SUM(
+            a.total_hours * COALESCE(e.hourly_rate, e.monthly_salary / ${STANDARD_MONTHLY_HOURS})
+            + a.overtime_hours * COALESCE(e.overtime_rate, COALESCE(e.hourly_rate, e.monthly_salary / ${STANDARD_MONTHLY_HOURS}) * 1.5)
+          ) AS "laborCost"
+        FROM hr_attendance a
+        LEFT JOIN hr_employees e ON e.id = a.employee_id
+        ${where}
+        GROUP BY COALESCE(a.outlet, e.outlet), a.employee_id, e.name
+      `,
+      params
+    );
+
+    const totalLaborCost = rows.reduce((sum, r) => sum + Number(r.laborCost || 0), 0);
+    const totalHours = rows.reduce((sum, r) => sum + Number(r.totalHours || 0), 0);
+    const totalOvertimeHours = rows.reduce((sum, r) => sum + Number(r.overtimeHours || 0), 0);
+
+    // Pull net sales for the same period/outlet to compute labor %
+    let salesFilters = [];
+    let salesParams = [];
+    let sIdx = 1;
+    if (from) {
+      salesFilters.push(`date >= $${sIdx++}`);
+      salesParams.push(from);
+    }
+    if (to) {
+      salesFilters.push(`date <= $${sIdx++}`);
+      salesParams.push(to);
+    }
+    if (outlet) {
+      salesFilters.push(`outlet = $${sIdx++}`);
+      salesParams.push(outlet);
+    }
+    const salesWhere = salesFilters.length ? `WHERE ${salesFilters.join(" AND ")}` : "";
+    const salesResp = await pool.query(
+      `SELECT COALESCE(SUM(net_sales),0) AS netSales FROM sales ${salesWhere}`,
+      salesParams
+    );
+    const totalSales = Number(
+      salesResp.rows?.[0]?.netsales ?? salesResp.rows?.[0]?.netSales ?? 0
+    );
+
+    const laborCostPctOfSales = totalSales > 0 ? (totalLaborCost / totalSales) * 100 : null;
+
+    // Aggregate by outlet and employee
+    const byOutletMap = new Map();
+    rows.forEach((r) => {
+      const key = r.outlet || "Unassigned";
+      if (!byOutletMap.has(key)) {
+        byOutletMap.set(key, { outlet: key, totalLaborCost: 0, totalHours: 0, overtimeHours: 0 });
+      }
+      const ref = byOutletMap.get(key);
+      ref.totalLaborCost += Number(r.laborCost || 0);
+      ref.totalHours += Number(r.totalHours || 0);
+      ref.overtimeHours += Number(r.overtimeHours || 0);
+    });
+
+    res.json({
+      ok: true,
+      summary: {
+        totalLaborCost,
+        totalHours,
+        totalOvertimeHours,
+        totalSales,
+        laborCostPctOfSales,
+      },
+      byOutlet: Array.from(byOutletMap.values()),
+      byEmployee: rows,
+    });
+  } catch (err) {
+    console.error("Labor KPI error:", err);
+    res.status(500).json({ error: "REPORT_FAILED", message: err.message });
+  }
+});
+
+// NEW: HR assessments
+app.get("/api/hr/assessments", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { employeeId, from, to } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (employeeId) {
+    filters.push(`a.employee_id = $${idx++}`);
+    params.push(employeeId);
+  }
+  if (from) {
+    filters.push(`a.review_date >= $${idx++}`);
+    params.push(from);
+  }
+  if (to) {
+    filters.push(`a.review_date <= $${idx++}`);
+    params.push(to);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          a.id,
+          a.employee_id AS "employeeId",
+          e.name AS "employeeName",
+          a.review_date AS "reviewDate",
+          a.reviewer,
+          a.overall_rating AS "overallRating",
+          a.scores,
+          a.comments,
+          a.created_at AS "createdAt"
+        FROM hr_assessments a
+        LEFT JOIN hr_employees e ON e.id = a.employee_id
+        ${where}
+        ORDER BY a.review_date DESC NULLS LAST, a.created_at DESC NULLS LAST
+        LIMIT 200
+      `,
+      params
+    );
+    res.json({ ok: true, records: rows });
+  } catch (err) {
+    console.error("Fetch hr_assessments error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/hr/assessments", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { employeeId, reviewDate, reviewer, overallRating, scores, comments } = req.body || {};
+  if (!employeeId || !reviewDate || !reviewer) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `
+        INSERT INTO hr_assessments (
+          employee_id, review_date, reviewer, overall_rating, scores, comments
+        )
+        VALUES ($1,$2,$3,$4,$5,$6)
+        RETURNING id
+      `,
+      [employeeId, reviewDate, reviewer, overallRating || null, scores || null, comments || null]
+    );
+    res.json({ ok: true, id: rows[0]?.id });
+  } catch (err) {
+    console.error("Insert hr_assessments error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+// NEW: SOP library and employee acknowledgments
+app.get("/api/hr/sops", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          title,
+          description,
+          category,
+          effective_date AS "effectiveDate",
+          created_at AS "createdAt"
+        FROM hr_sops
+        ORDER BY effective_date DESC NULLS LAST, created_at DESC NULLS LAST
+      `
+    );
+    res.json({ ok: true, records: rows });
+  } catch (err) {
+    console.error("Fetch hr_sops error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.get("/api/hr/sop-assignments", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { employeeId } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+  if (employeeId) {
+    filters.push(`es.employee_id = $${idx++}`);
+    params.push(employeeId);
+  }
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          es.id,
+          es.employee_id AS "employeeId",
+          es.sop_id AS "sopId",
+          s.title,
+          s.category,
+          es.assigned_date AS "assignedDate",
+          es.acknowledged_date AS "acknowledgedDate",
+          es.status,
+          es.created_at AS "createdAt"
+        FROM hr_employee_sops es
+        LEFT JOIN hr_sops s ON s.id = es.sop_id
+        ${where}
+        ORDER BY es.created_at DESC NULLS LAST
+      `,
+      params
+    );
+    res.json({ ok: true, records: rows });
+  } catch (err) {
+    console.error("Fetch hr_employee_sops error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/hr/sops/assign", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { employeeId, sopId, assignedDate = new Date().toISOString().slice(0, 10), status = "Assigned" } =
+    req.body || {};
+  if (!employeeId || !sopId) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    const update = await pool.query(
+      `
+        UPDATE hr_employee_sops
+        SET assigned_date=$1, status=$2
+        WHERE employee_id=$3 AND sop_id=$4
+      `,
+      [assignedDate, status, employeeId, sopId]
+    );
+
+    if (update.rowCount === 0) {
+      await pool.query(
+        `
+          INSERT INTO hr_employee_sops (employee_id, sop_id, assigned_date, status)
+          VALUES ($1,$2,$3,$4)
+        `,
+        [employeeId, sopId, assignedDate, status]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Assign SOP error:", err);
+    res.status(500).json({ error: "UPSERT_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/hr/sops/ack", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { employeeId, sopId, acknowledgedDate = new Date().toISOString().slice(0, 10) } = req.body || {};
+  if (!employeeId || !sopId) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    const update = await pool.query(
+      `
+        UPDATE hr_employee_sops
+        SET acknowledged_date=$1, status='Acknowledged'
+        WHERE employee_id=$2 AND sop_id=$3
+      `,
+      [acknowledgedDate, employeeId, sopId]
+    );
+
+    if (update.rowCount === 0) {
+      await pool.query(
+        `
+          INSERT INTO hr_employee_sops (employee_id, sop_id, assigned_date, acknowledged_date, status)
+          VALUES ($1,$2,$3,$4,'Acknowledged')
+        `,
+        [employeeId, sopId, acknowledgedDate, acknowledgedDate]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Acknowledge SOP error:", err);
+    res.status(500).json({ error: "UPSERT_FAILED", message: err.message });
   }
 });
 
