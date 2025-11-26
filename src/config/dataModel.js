@@ -80,6 +80,11 @@ export const RENT_OPEX_FIELDS = [
   { key: "outlet", label: "Outlet", type: "text", required: true },
   { key: "category", label: "Category", type: "text", required: true },
   { key: "description", label: "Description", type: "text", required: true },
+  { key: "landlord", label: "Landlord / counterparty", type: "text", required: false },
+  { key: "frequency", label: "Frequency", type: "text", required: false },
+  { key: "leaseStart", label: "Lease start", type: "date", required: false },
+  { key: "leaseEnd", label: "Lease end", type: "date", required: false },
+  { key: "isRentFixed", label: "Is rent fixed", type: "boolean", required: false },
   { key: "amount", label: "Amount", type: "number", required: true },
   { key: "notes", label: "Notes", type: "text", required: false },
 ];

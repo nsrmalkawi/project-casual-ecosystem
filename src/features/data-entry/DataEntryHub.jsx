@@ -14,6 +14,7 @@ import PurchasesEntry from "./PurchasesEntry";
 import WasteEntry from "./WasteEntry";
 import HREntry from "./HREntry";
 import InventoryEntry from "./InventoryEntry";
+import RentOpexEntry from "./RentOpexEntry";
 
 // Tabs inside Data Entry Hub
 const SECTION_TABS = [
@@ -54,7 +55,6 @@ function DataEntryHub() {
   const [purchases, setPurchases] = useLocalArray("pc_purchases");
   const [waste, setWaste] = useLocalArray("pc_waste");
   const [inventory, setInventory] = useLocalArray("pc_inventory");
-  const [rentOpex, setRentOpex] = useLocalArray("pc_rent_opex");
   const [hr, setHr] = useLocalArray("pc_hr_labor");
   const [pettyCash, setPettyCash] = useLocalArray("pc_petty_cash");
 
@@ -727,130 +727,7 @@ function DataEntryHub() {
     </div>
   );
 
-  // ============================================================
-  // RENT & OPEX
-  // ============================================================
-  const addRentOpexRow = () => {
-    setRentOpex((prev) => [
-      ...prev,
-      {
-        id: makeId(),
-        date: "",
-        outlet: "",
-        category: "",
-        amount: "",
-        notes: "",
-      },
-    ]);
-  };
-
-  const handleRentOpexChange = (rowId, field, value) => {
-    setRentOpex((prev) =>
-      prev.map((row) =>
-        row.id === rowId ? { ...row, [field]: value } : row
-      )
-    );
-  };
-
-  const renderRentSection = () => (
-    <div className="card">
-      <h3 className="card-title">Rent & Opex</h3>
-      <p className="page-subtitle">
-        Operating expenses by outlet and category. Used in EBITDA and overhead
-        analysis.
-      </p>
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Date*</th>
-              <th>Outlet*</th>
-              <th>Category*</th>
-              <th>Amount (JOD)*</th>
-              <th>Notes</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rentOpex.length === 0 ? (
-              <tr>
-                <td colSpan="6">No rent/opex rows yet.</td>
-              </tr>
-            ) : (
-              rentOpex.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <input
-                      type="date"
-                      value={row.date || ""}
-                      onChange={(e) =>
-                        handleRentOpexChange(row.id, "date", e.target.value)
-                      }
-                      required
-                    />
-                  </td>
-                  <td>
-                    {renderOutletSelect(row.outlet, (val) =>
-                      handleRentOpexChange(row.id, "outlet", val)
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.category || ""}
-                      onChange={(e) =>
-                        handleRentOpexChange(row.id, "category", e.target.value)
-                      }
-                      required
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      value={row.amount || ""}
-                      onChange={(e) =>
-                        handleRentOpexChange(row.id, "amount", e.target.value)
-                      }
-                      required
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.notes || ""}
-                      onChange={(e) =>
-                        handleRentOpexChange(row.id, "notes", e.target.value)
-                      }
-                    />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleDeleteRow(rentOpex, setRentOpex, row.id)
-                      }
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-      <button
-        type="button"
-        className="primary-btn"
-        style={{ marginTop: 8 }}
-        onClick={addRentOpexRow}
-      >
-        + Add Rent/Opex Row
-      </button>
-    </div>
-  );
+  // RENT & OPEX (handled via RentOpexEntry component)
 
   // ============================================================
   // HR / LABOR
@@ -1176,7 +1053,12 @@ function DataEntryHub() {
       case "inventory":
         return <InventoryEntry />;
       case "rent-opex":
-        return renderRentSection();
+        return (
+          <RentOpexEntry
+            brandOptions={brandOptions}
+            outletOptions={outletOptions}
+          />
+        );
       case "hr-labor":
         return <HREntry />;
       case "petty-cash":
@@ -1230,3 +1112,6 @@ function DataEntryHub() {
 }
 
 export default DataEntryHub;
+
+
+

@@ -8,6 +8,7 @@ AI-assisted F&B analytics and operations toolkit built with React + Vite and a N
    - `VITE_GOOGLE_CLOUD_API_KEY`, `VITE_GOOGLE_CLOUD_MODEL`
    - `DATABASE_URL` (Postgres/Neon) with `sslmode=require`
    - `PORT` (defaults to 3001 if unset)
+   - If upgrading existing databases, run `db/add_rent_lease_fields.sql` to add lease metadata columns to `rent_opex` (frequency, landlord, lease_start, lease_end, is_rent_fixed).
 3) Start dev (frontend + backend): `npm run dev`
    - Frontend: http://localhost:5173 (proxies `/api` to backend)
    - Backend: http://localhost:${PORT}

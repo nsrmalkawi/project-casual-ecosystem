@@ -78,6 +78,23 @@ const EXPORTABLE_TABLES = new Set([
   "hr_employee_sops",
 ]);
 
+// Cache rent_opex columns to keep inserts/selects compatible if the DB hasn't been migrated yet.
+let rentOpexColumns = null;
+async function hasRentOpexColumn(name) {
+  if (!pool) return false;
+  if (!rentOpexColumns) {
+    const { rows } = await pool.query(
+      `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'rent_opex'
+      `
+    );
+    rentOpexColumns = new Set(rows.map((r) => r.column_name));
+  }
+  return rentOpexColumns.has(name);
+}
+
 // NEW: HR helpers for attendance/labor cost
 const STANDARD_DAILY_HOURS = 8;
 const STANDARD_MONTHLY_HOURS = 173.33; // ~40h/week * 52 / 12
@@ -1098,7 +1115,7 @@ app.get("/api/inventory-items", async (_req, res) => {
   }
 });
 
-// Persist rent/opex rows
+// Persist rent/opex rows (with optional lease metadata)
 app.post("/api/rent-opex", async (req, res) => {
   if (!pool) {
     return res
@@ -1106,17 +1123,54 @@ app.post("/api/rent-opex", async (req, res) => {
       .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
   }
 
-  const { date, brand, outlet, category, description, amount, notes } = req.body || {};
+  const {
+    date,
+    brand,
+    outlet,
+    category,
+    description,
+    amount,
+    notes,
+    isRentFixed,
+    frequency,
+    landlord,
+    leaseStart,
+    leaseEnd,
+  } = req.body || {};
 
   if (!date || !brand || !outlet || !category || !description || amount == null) {
     return res.status(400).json({ error: "MISSING_FIELDS" });
   }
 
   try {
+    const columns = ["date", "brand", "outlet", "category", "description", "amount", "notes"];
+    const values = [date, brand, outlet, category, description, amount, notes || null];
+
+    if (await hasRentOpexColumn("is_rent_fixed")) {
+      columns.push("is_rent_fixed");
+      values.push(Boolean(isRentFixed));
+    }
+    if (await hasRentOpexColumn("frequency")) {
+      columns.push("frequency");
+      values.push(frequency || null);
+    }
+    if (await hasRentOpexColumn("landlord")) {
+      columns.push("landlord");
+      values.push(landlord || null);
+    }
+    if (await hasRentOpexColumn("lease_start")) {
+      columns.push("lease_start");
+      values.push(leaseStart || null);
+    }
+    if (await hasRentOpexColumn("lease_end")) {
+      columns.push("lease_end");
+      values.push(leaseEnd || null);
+    }
+
+    const placeholders = columns.map((_, idx) => `$${idx + 1}`).join(",");
     await pool.query(
-      `INSERT INTO rent_opex (date, brand, outlet, category, description, amount, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [date, brand, outlet, category, description, amount, notes || null]
+      `INSERT INTO rent_opex (${columns.join(",")}) VALUES (${placeholders})`,
+      values
     );
     res.json({ ok: true });
   } catch (err) {
@@ -1133,8 +1187,35 @@ app.get("/api/rent-opex", async (_req, res) => {
       .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
   }
   try {
+    const selectCols = [
+      "id",
+      "date",
+      "brand",
+      "outlet",
+      "category",
+      "description",
+      "amount",
+      "notes",
+    ];
+
+    if (await hasRentOpexColumn("is_rent_fixed")) {
+      selectCols.push(`is_rent_fixed AS "isRentFixed"`);
+    }
+    if (await hasRentOpexColumn("frequency")) {
+      selectCols.push(`frequency`);
+    }
+    if (await hasRentOpexColumn("landlord")) {
+      selectCols.push(`landlord`);
+    }
+    if (await hasRentOpexColumn("lease_start")) {
+      selectCols.push(`lease_start AS "leaseStart"`);
+    }
+    if (await hasRentOpexColumn("lease_end")) {
+      selectCols.push(`lease_end AS "leaseEnd"`);
+    }
+
     const { rows } = await pool.query(
-      `SELECT id, date, brand, outlet, category, description, amount, notes
+      `SELECT ${selectCols.join(", ")}
        FROM rent_opex
        ORDER BY date DESC NULLS LAST, created_at DESC NULLS LAST
        LIMIT 500`

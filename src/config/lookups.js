@@ -60,6 +60,26 @@ export const DEFAULT_HR_ROLES = [
   "Other",
 ];
 
+// Rent / Opex
+export const RENT_OPEX_CATEGORIES = [
+  "Base rent",
+  "Utilities",
+  "Service charge",
+  "Maintenance",
+  "Insurance",
+  "Security",
+  "Depreciation / Amortization",
+  "Interest / Tax",
+  "Other",
+];
+
+export const RENT_FREQUENCY_OPTIONS = [
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "semiannual", label: "Semi-annual" },
+  { value: "annual", label: "Annual" },
+];
+
 // Backwards-compatible named exports (in case other files already use them)
 export const BRAND_OPTIONS = DEFAULT_BRANDS;
 export const OUTLET_OPTIONS = DEFAULT_OUTLETS;
