@@ -45,6 +45,7 @@ export default function RentOpexEntry() {
         brand: "",
         outlet: "",
         category: "",
+        isRentFixed: false, // NEW: rent-only flag (fixed, paid twice a year)
         description: "",
         amount: "",
         notes: "",
@@ -79,6 +80,7 @@ export default function RentOpexEntry() {
               <th>Brand</th>
               <th>Outlet</th>
               <th>Category</th>
+              <th>Rent only?</th>
               <th>Description</th>
               <th>Amount (JOD)</th>
               <th>Notes</th>
@@ -147,6 +149,14 @@ export default function RentOpexEntry() {
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={!!row.isRentFixed}
+                      onChange={(e) => handleChange(row.id, "isRentFixed", e.target.checked)}
+                      title="Mark as fixed rent (paid twice a year)"
+                    />
                   </td>
                   <td>
                     <input
