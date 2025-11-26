@@ -700,14 +700,18 @@ function CashFlowHub() {
                   type="monotone"
                   dataKey="netActual"
                   name="Net cash (actual)"
-                  strokeWidth={2}
+                  strokeWidth={2.4}
+                  stroke="#4f46e5"
+                  dot={{ r: 3, stroke: "#4f46e5", fill: "#4f46e5" }}
                 />
                 <Line
                   type="monotone"
                   dataKey="netForecast"
                   name="Net cash (forecast)"
-                  strokeWidth={2}
+                  strokeWidth={2.4}
+                  stroke="#0ea5e9"
                   strokeDasharray="4 4"
+                  dot={{ r: 3, stroke: "#0ea5e9", fill: "#0ea5e9" }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -741,7 +745,9 @@ function CashFlowHub() {
                   type="monotone"
                   dataKey="balance"
                   name="Projected balance"
-                  strokeWidth={2}
+                  strokeWidth={2.4}
+                  stroke="#16a34a"
+                  dot={{ r: 3, stroke: "#16a34a", fill: "#16a34a" }}
                 />
               </LineChart>
             </ResponsiveContainer>

@@ -453,7 +453,7 @@ function SupplierPerformanceHub() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="Spend" name="Total spend (JOD)" />
+                <Bar dataKey="Spend" name="Total spend (JOD)" fill="#4f46e5" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

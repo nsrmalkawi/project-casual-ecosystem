@@ -22,6 +22,17 @@ const ICON_MAP = {
   custom_fire: "🔥",
 };
 
+// Map report ids to exportable tables for quick CSV/XLSX shortcuts
+const EXPORT_TABLE_MAP = {
+  dailySales: "sales",
+  laborCost: "hr_payroll",
+  purchases: "purchases",
+  wasteVariance: "waste",
+  rentOpex: "rent_opex",
+  pettyCash: "petty_cash",
+  inventory: "inventory_items",
+};
+
 function fallbackSummary(summary) {
   if (!summary) return "";
   const entries = Object.entries(summary)
@@ -109,18 +120,46 @@ function ReportCard({ report, onOpen }) {
           </span>
         ))}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         <div style={{ fontSize: 11, color: "#6b7280" }}>
           Filters: {report.requiredFilters?.join(", ") || "None"}
         </div>
-        <button
-          type="button"
-          className="primary-btn"
-          onClick={() => onOpen(report)}
-          style={{ padding: "6px 10px", fontSize: 12 }}
-        >
-          Open
-        </button>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {report.exportTable && (
+            <>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(`/api/export/${report.exportTable}`, "_blank");
+                }}
+                style={{ padding: "6px 8px", fontSize: 11 }}
+              >
+                CSV
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(`/api/export-xlsx/${report.exportTable}`, "_blank");
+                }}
+                style={{ padding: "6px 8px", fontSize: 11 }}
+              >
+                XLSX
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="primary-btn"
+            onClick={() => onOpen(report)}
+            style={{ padding: "6px 10px", fontSize: 12 }}
+          >
+            Open
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -132,6 +171,7 @@ export default function ReportsCenter() {
   const [totals, setTotals] = useState({});
   const [totalsLoading, setTotalsLoading] = useState(false);
   const [totalsError, setTotalsError] = useState("");
+  const [health, setHealth] = useState(null);
   const [selected, setSelected] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -139,6 +179,7 @@ export default function ReportsCenter() {
   const [aiSummary, setAiSummary] = useState("");
   const [aiModel, setAiModel] = useState("");
   const [aiStatus, setAiStatus] = useState("idle");
+  const [copyStatus, setCopyStatus] = useState("");
   const [iconOverrides] = useState(() => loadData("pc_report_icons_v1", {}) || {});
   const [fullReport, setFullReport] = useState("");
   const [fullReportModel, setFullReportModel] = useState("");
@@ -153,7 +194,11 @@ export default function ReportsCenter() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return reportsConfig
-      .map((r) => ({ ...r, icon: iconOverrides[r.id] || r.icon }))
+      .map((r) => ({
+        ...r,
+        icon: iconOverrides[r.id] || r.icon,
+        exportTable: EXPORT_TABLE_MAP[r.id],
+      }))
       .filter((r) => {
         const matchesCategory = !category || r.category === category;
         const haystack = `${r.title} ${r.description} ${r.tags?.join(" ")}`.toLowerCase();
@@ -195,6 +240,20 @@ export default function ReportsCenter() {
       }
     };
     load();
+  }, []);
+
+  // NEW: health/debug info for AI and API
+  useEffect(() => {
+    if (!API_BASE) return;
+    const loadHealth = async () => {
+      try {
+        const data = await fetchJson(`${API_BASE}/api/health`);
+        setHealth(data);
+      } catch (e) {
+        setHealth({ error: e.message });
+      }
+    };
+    loadHealth();
   }, []);
 
   const handleOpen = async (report) => {
@@ -295,6 +354,15 @@ export default function ReportsCenter() {
           marginBottom: 12,
         }}
       >
+        {health && (
+          <div className="card" style={{ gridColumn: "1 / -1", padding: 10, borderLeft: "4px solid #0ea5e9" }}>
+            <div className="page-subtitle">API health</div>
+            <div style={{ fontSize: 13, color: "#0f172a" }}>
+              Model: {health.model || "-"} | hasApiKey: {health.hasApiKey ? "yes" : "no"} | env: {health.env || "-"}
+              {health.error && <span style={{ color: "#b91c1c" }}> {health.error}</span>}
+            </div>
+          </div>
+        )}
         {totalsError ? (
           <div style={{ color: "#b91c1c" }}>{totalsError}</div>
         ) : (
@@ -490,6 +558,24 @@ export default function ReportsCenter() {
               >
                 <div className="card" style={{ background: "#fdf2f8" }}>
                   <div className="page-subtitle">AI summary & recommendations</div>
+                  {aiSummary && (
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ marginBottom: 6, padding: "4px 8px", fontSize: 11 }}
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(aiSummary);
+                          setCopyStatus("Copied");
+                          setTimeout(() => setCopyStatus(""), 1500);
+                        } catch (e) {
+                          setCopyStatus("Copy failed");
+                        }
+                      }}
+                    >
+                      Copy AI summary {copyStatus && `(${copyStatus})`}
+                    </button>
+                  )}
                   {aiSummary ? (
                     <div
                       style={{ fontSize: 13 }}
