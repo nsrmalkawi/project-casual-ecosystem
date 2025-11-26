@@ -45,6 +45,7 @@ Frontend (Static Site)
 - Config: `src/config/reportsConfig.js`
 - UI: `src/features/reports/ReportsCenter.jsx` (shown under the Reports tab)
 - Filterable cards with search/category; "Open" uses the configured route or tab.
+- Executive Dashboard tab: colorful snapshot across sales, COGS, labor, rent/opex, petty cash with quick links to Reports, Action Plan, Cash Flow, and Scenario Planning.
 
 ## Mobile responsiveness
 The layout adapts under 900px: stacked panels, wrapped nav buttons, compressed padding, and horizontal scroll on tables.

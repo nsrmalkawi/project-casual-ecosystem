@@ -16,12 +16,14 @@ import BrandingMarketingHub from "./features/branding/BrandingMarketingHub";
 import ActionPlanHub from "./features/action-plan/ActionPlanHub";
 import AdminHub from "./features/admin/AdminHub";
 import HrHub from "./features/hr/HrHub";
+import ExecutiveDashboard from "./features/dashboard/ExecutiveDashboard";
 
 import { useData } from "./DataContext";
 import { APP_USERS } from "./authConfig";
 
 // Navigation map with role access
 const NAV_ITEMS = [
+  { id: "dashboard", label: "Executive Dashboard", roles: ["admin", "manager", "viewer"] },
   { id: "data-entry", label: "Data Entry Hub", roles: ["admin", "manager"] },
   { id: "reports", label: "Reports & KPIs", roles: ["admin", "manager", "viewer"] },
   { id: "cash-flow", label: "Cash Flow", roles: ["admin", "manager", "viewer"] },
@@ -303,7 +305,7 @@ function App() {
             onKeyDown={handleNavSearchEnter}
           />
           <div className="quick-pills">
-            {["reports", "menu", "recipes", "action-plan"].map((id) => {
+            {["dashboard", "reports", "menu", "recipes", "action-plan"].map((id) => {
               const nav = visibleNavItems.find((n) => n.id === id);
               if (!nav) return null;
               return (
@@ -421,6 +423,8 @@ function App() {
 
         <main className="app-content">
           {/* Tab routing with role checks */}
+          {activeTab === "dashboard" && <ExecutiveDashboard />}
+
           {activeTab === "data-entry" &&
             (role === "admin" || role === "manager") && <DataEntryHub />}
 
