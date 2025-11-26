@@ -632,7 +632,7 @@ function ReportsHub() {
         mode: "anomaly",
         payload: aiPayload,
         question:
-          "Return markdown with sections: ## Anomalies (bullet list), ## Table (top 3 anomalies in a markdown table with Metric | Value | Why it matters), ## Risks (bullets), ## Actions (3-5 bullets). Keep it concise, numbers with currency/%.",
+          "Return markdown with sections: ## Snapshot (top anomalies), ## Tables (at least one table with Metric | Value | Why it matters), ## Risks, ## Actions (3-5 bullets). Keep it concise with currency/% where relevant.",
       });
       setAiAnomalyText(res.text || "");
       setResModel(res.model || null);
@@ -653,7 +653,7 @@ function ReportsHub() {
         mode: "actionPlan",
         payload: aiPayload,
         question:
-          "Return markdown with sections: ## Quick Wins (3 bullets), ## Medium-term (3 bullets), ## Risks to watch (bullets), and a markdown table of 3 KPIs with Target | Current | Gap | Owner suggestion. Keep it concise and F&B oriented.",
+          "Return markdown with sections: ## Snapshot (key gaps), ## Tables (one markdown table with KPI | Target | Current | Gap | Owner suggestion), ## Risks, ## Actions (Quick wins + medium term, 5 bullets total). Keep it concise and F&B oriented.",
       });
       setAiActionText(res.text || "");
       setResModel(res.model || null);
@@ -680,7 +680,7 @@ function ReportsHub() {
           waste: filteredWaste.slice(0, 50),
         },
         question:
-          "Return structured markdown with sections: ## COGS Snapshot (key numbers/percentages), ## Quick Wins (3-5 bullets to cut COGS), ## Supplier/Order Tactics (3 bullets), ## Waste/Portion Controls (3 bullets). Keep it concise and F&B focused.",
+          "Return markdown with sections: ## Snapshot (COGS and %), ## Tables (at least one with KPI | Value | Comment), ## Risks, ## Actions (Quick Wins, Supplier/Order Tactics, Waste/Portion Controls in 5 bullets). Keep it concise and F&B focused.",
       });
       setAiCogsText(res.text || "");
       setAiCogsModel(res.model || "");
@@ -702,7 +702,7 @@ function ReportsHub() {
         mode: "report",
         payload: scopePayload,
         question:
-          `You are an ops advisor. Scope: ${opsAdvisorScope}. Return markdown with sections: ## Snapshot (key numbers), ## Table (at least one markdown table with KPI | Value | Comment), ## Risks, ## Actions (5 bullets). Keep concise, numbers with currency/% where relevant.`,
+          `You are an ops advisor. Scope: ${opsAdvisorScope}. Return markdown with sections: ## Snapshot, ## Tables (at least one markdown table with KPI | Value | Comment), ## Risks, ## Actions (5 bullets). Keep concise, numbers with currency/% where relevant.`,
       });
       setOpsAdvisorText(res.text || "");
       setOpsAdvisorModel(res.model || "");

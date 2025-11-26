@@ -11,15 +11,15 @@ const API_BASE =
 
 // Icon map (configurable via Admin > Report icons)
 const ICON_MAP = {
-  bar_chart: "📊",
-  line_chart: "📈",
-  pie_chart: "🧮",
-  labor: "👥",
-  waste: "🗑️",
-  finance: "💵",
-  inventory: "📦",
-  custom_star: "⭐",
-  custom_fire: "🔥",
+  bar_chart: "BAR",
+  line_chart: "LINE",
+  pie_chart: "PIE",
+  labor: "LAB",
+  waste: "WST",
+  finance: "FIN",
+  inventory: "INV",
+  custom_star: "STAR",
+  custom_fire: "FIRE",
 };
 
 // Map report ids to exportable tables for quick CSV/XLSX shortcuts
@@ -62,12 +62,36 @@ function SummaryTile({ label, value, color = "#4f46e5", loading }) {
         {label}
       </div>
       <div style={{ fontSize: 20, fontWeight: 700 }}>
-        {loading ? "…" : Number.isFinite(num) ? num.toLocaleString() : value || "-"}
+        {loading ? "." : Number.isFinite(num) ? num.toLocaleString() : value || "-"}
       </div>
+      {/* NEW: sparkline bar for a consistent visual cue */}
+      {Number.isFinite(num) && (
+        <div
+          style={{
+            marginTop: 6,
+            height: 6,
+            borderRadius: 999,
+            background: "#e5e7eb",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${Math.min(100, Math.abs(num))}%`,
+              background: color,
+              opacity: 0.75,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
-
 function renderMarkdown(md) {
   if (!md) return "";
   marked.setOptions({ mangle: false, headerIds: false });
@@ -75,7 +99,7 @@ function renderMarkdown(md) {
 }
 
 function ReportCard({ report, onOpen }) {
-  const icon = ICON_MAP[report.icon] || ICON_MAP[report.iconOverride] || report.icon || "📊";
+  const icon = ICON_MAP[report.icon] || ICON_MAP[report.iconOverride] || report.icon || "BAR";
   return (
     <div
       className="card"
@@ -274,12 +298,12 @@ export default function ReportsCenter() {
 
       try {
         setAiStatus("loading");
-        const aiRes = await callAi({
-          mode: "report",
-          payload: { reportId: report.id, data },
-          question:
-            `Return structured markdown:\n- Title: "${report.title}"\n- Sections: ## Snapshot (key KPIs with numbers), ## Table (one markdown table with at least 3 KPIs | Value | Comment), ## Risks (bullets), ## Recommended Actions (3-5 bullets).\n- Keep concise and F&B focused.`,
-        });
+          const aiRes = await callAi({
+            mode: "report",
+            payload: { reportId: report.id, data },
+            question:
+              `Return structured markdown with sections: ## Snapshot, ## Tables (at least one markdown table with KPI | Value | Comment), ## Risks, ## Actions (3-5 bullets). Keep concise, F&B-focused, and include the report title "${report.title}".`,
+          });
         setAiSummary(aiRes.text || "");
         setAiModel(aiRes.model || "");
         setAiStatus("done");
@@ -325,7 +349,7 @@ export default function ReportsCenter() {
         mode: "report",
         payload: { scope: "full-system", summaries: results },
         question:
-          "Create structured markdown with sections: ## Executive Summary, ## Sales, ## Labor, ## COGS/Purchases, ## Waste, ## Opex/Petty, ## Inventory, ## Risks, ## Actions (5 bullets). Include at least two markdown tables (e.g., Sales vs Labor; Waste vs Purchases) with columns KPI | Value | Comment. Show key numbers with currency/%, concise and actionable.",
+          "Create structured markdown with sections: ## Snapshot, ## Tables (at least two markdown tables e.g., Sales vs Labor; Waste vs Purchases with KPI | Value | Comment), ## Risks, ## Actions (5 bullets). Cover Sales, Labor, COGS/Purchases, Waste, Opex/Petty, Inventory, EBITDA. Use currency/% and keep concise.",
       });
 
       setFullReport(aiRes.text || "");
@@ -442,17 +466,47 @@ export default function ReportsCenter() {
           {fullError && <div style={{ color: "#b91c1c", marginTop: 6 }}>{fullError}</div>}
           {fullStatus === "loading" && <div style={{ marginTop: 6 }}>Generating...</div>}
           {fullReport && (
-            <div
-              style={{
-                marginTop: 8,
-                background: "#f8fafc",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                fontSize: 13,
-              }}
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(fullReport) }}
-            />
+            <>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  style={{ padding: "4px 8px", fontSize: 11 }}
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(fullReport);
+                  }}
+                >
+                  Copy full report
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  style={{ padding: "4px 8px", fontSize: 11 }}
+                  onClick={() => {
+                    const blob = new Blob([fullReport], { type: "text/markdown" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "full-report.md";
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Download .md
+                </button>
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  background: "#f8fafc",
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  fontSize: 13,
+                }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(fullReport) }}
+              />
+            </>
           )}
           {fullReportModel && fullReport && (
             <div style={{ fontSize: 11, color: "#475569", marginTop: 6 }}>Model: {fullReportModel}</div>
@@ -559,22 +613,40 @@ export default function ReportsCenter() {
                 <div className="card" style={{ background: "#fdf2f8" }}>
                   <div className="page-subtitle">AI summary & recommendations</div>
                   {aiSummary && (
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ marginBottom: 6, padding: "4px 8px", fontSize: 11 }}
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(aiSummary);
-                          setCopyStatus("Copied");
-                          setTimeout(() => setCopyStatus(""), 1500);
-                        } catch (e) {
-                          setCopyStatus("Copy failed");
-                        }
-                      }}
-                    >
-                      Copy AI summary {copyStatus && `(${copyStatus})`}
-                    </button>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ padding: "4px 8px", fontSize: 11 }}
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(aiSummary);
+                            setCopyStatus("Copied");
+                            setTimeout(() => setCopyStatus(""), 1500);
+                          } catch (e) {
+                            setCopyStatus("Copy failed");
+                          }
+                        }}
+                      >
+                        Copy AI summary {copyStatus && `(${copyStatus})`}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ padding: "4px 8px", fontSize: 11 }}
+                        onClick={() => {
+                          const blob = new Blob([aiSummary], { type: "text/markdown" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = "report-summary.md";
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                      >
+                        Download .md
+                      </button>
+                    </div>
                   )}
                   {aiSummary ? (
                     <div
@@ -596,3 +668,9 @@ export default function ReportsCenter() {
     </div>
   );
 }
+
+
+
+
+
+
