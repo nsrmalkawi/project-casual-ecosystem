@@ -453,6 +453,47 @@ function ReportsHub() {
     };
   }, [ebitdaByOutlet]);
 
+  // NEW: KPI comparison rows for table/export
+  const kpiComparison = useMemo(() => {
+    return ebitdaByOutlet.map((row) => {
+      const foodPct = row.totalSales ? row.totalFoodCost / row.totalSales : 0;
+      const laborPct = row.totalSales ? row.totalLaborCost / row.totalSales : 0;
+      return {
+        outlet: row.outlet,
+        brand: row.brand,
+        sales: row.totalSales,
+        foodPct,
+        laborPct,
+        ebitda: row.ebitda,
+        ebitdaMargin: row.ebitdaMargin,
+      };
+    });
+  }, [ebitdaByOutlet]);
+
+  function exportKpiCsv() {
+    if (!kpiComparison.length) return;
+    const header = ["Outlet", "Brand", "Sales", "Food%", "Labor%", "EBITDA", "EBITDA%"];
+    const rows = kpiComparison.map((r) => [
+      r.outlet,
+      r.brand,
+      r.sales,
+      percent(r.foodPct),
+      percent(r.laborPct),
+      r.ebitda,
+      percent(r.ebitdaMargin),
+    ]);
+    const csv = [header, ...rows]
+      .map((line) => line.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "kpi-comparison.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // --------- Simple automatic alerts (Data-driven) ---------
   const triggeredAlerts = useMemo(() => {
     const alerts = [];
@@ -501,6 +542,11 @@ function ReportsHub() {
   const [aiCogsStatus, setAiCogsStatus] = useState("idle"); // NEW: COGS AI
   const [aiCogsText, setAiCogsText] = useState("");
   const [aiCogsModel, setAiCogsModel] = useState("");
+  const [opsAdvisorOpen, setOpsAdvisorOpen] = useState(false); // NEW: Ops advisor modal
+  const [opsAdvisorScope, setOpsAdvisorScope] = useState("sales");
+  const [opsAdvisorStatus, setOpsAdvisorStatus] = useState("idle");
+  const [opsAdvisorText, setOpsAdvisorText] = useState("");
+  const [opsAdvisorModel, setOpsAdvisorModel] = useState("");
   const aiReportRef = useRef(null);
   const [resModel, setResModel] = useState(null);
 
@@ -642,6 +688,28 @@ function ReportsHub() {
     } catch (err) {
       setAiError(err.message || "COGS AI suggestions failed.");
       setAiCogsStatus("error");
+    }
+  }
+
+  // NEW: Ops advisor (Sales/COGS/Labor/Cashflow)
+  async function handleOpsAdvisor() {
+    if (!aiPayload) return;
+    setAiError(null);
+    setOpsAdvisorStatus("loading");
+    try {
+      const scopePayload = { ...aiPayload, scope: opsAdvisorScope };
+      const res = await callAi({
+        mode: "report",
+        payload: scopePayload,
+        question:
+          `You are an ops advisor. Scope: ${opsAdvisorScope}. Return markdown with sections: ## Snapshot (key numbers), ## Table (at least one markdown table with KPI | Value | Comment), ## Risks, ## Actions (5 bullets). Keep concise, numbers with currency/% where relevant.`,
+      });
+      setOpsAdvisorText(res.text || "");
+      setOpsAdvisorModel(res.model || "");
+      setOpsAdvisorStatus("done");
+    } catch (err) {
+      setAiError(err.message || "Ops advisor failed.");
+      setOpsAdvisorStatus("error");
     }
   }
 
@@ -893,6 +961,18 @@ function ReportsHub() {
           <button
             type="button"
             className="secondary-btn"
+            onClick={() => {
+              setOpsAdvisorOpen(true);
+              setOpsAdvisorStatus("idle");
+              setOpsAdvisorText("");
+            }}
+          >
+            AI Ops advisor
+          </button>
+
+          <button
+            type="button"
+            className="secondary-btn"
             onClick={handleExportPdf}
             disabled={!aiAnomalyText && !aiActionText}
           >
@@ -997,11 +1077,11 @@ function ReportsHub() {
             </details>
           )}
 
-          {aiCogsText && (
-            <details open className="section">
-              <summary
-                style={{
-                  fontSize: 14,
+      {aiCogsText && (
+        <details open className="section">
+          <summary
+            style={{
+              fontSize: 14,
                   fontWeight: 700,
                   marginBottom: 4,
                   color: "#0f172a",
@@ -1029,11 +1109,156 @@ function ReportsHub() {
               )}
             </details>
           )}
+
+          {opsAdvisorOpen && (
+            <div
+              className="card"
+              style={{
+                marginTop: 12,
+                border: "1px solid #cbd5e1",
+                background: "#f8fafc",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <div>
+                  <h3 className="card-title" style={{ marginBottom: 4 }}>
+                    AI Ops advisor
+                  </h3>
+                  <div className="page-subtitle">Choose a scope and get structured advice.</div>
+                </div>
+                <button type="button" className="secondary-btn" onClick={() => setOpsAdvisorOpen(false)}>
+                  Close
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                <select
+                  value={opsAdvisorScope}
+                  onChange={(e) => setOpsAdvisorScope(e.target.value)}
+                  style={{ padding: 8, borderRadius: 6, border: "1px solid #d1d5db" }}
+                >
+                  <option value="sales">Sales</option>
+                  <option value="cogs">COGS</option>
+                  <option value="labor">Labor</option>
+                  <option value="cashflow">Cashflow</option>
+                </select>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={handleOpsAdvisor}
+                  disabled={opsAdvisorStatus === "loading"}
+                >
+                  {opsAdvisorStatus === "loading" ? "Thinking..." : "Generate advice"}
+                </button>
+                {opsAdvisorText && (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(opsAdvisorText);
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                    >
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => {
+                        const blob = new Blob([opsAdvisorText], { type: "text/markdown" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "ops-advisor.md";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      Download .md
+                    </button>
+                  </>
+                )}
+              </div>
+              {opsAdvisorStatus === "loading" && <div style={{ marginTop: 6 }}>Loading...</div>}
+              {opsAdvisorText && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 8,
+                    padding: 10,
+                    background: "#ffffff",
+                    maxHeight: 260,
+                    overflowY: "auto",
+                    fontSize: 13,
+                  }}
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(opsAdvisorText) }}
+                />
+              )}
+              {opsAdvisorModel && (
+                <div style={{ fontSize: 11, color: "#475569", marginTop: 4 }}>
+                  Model: {opsAdvisorModel}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Alerts summary (simple auto alerts) */}
       <AlertsSummaryBox triggeredAlerts={triggeredAlerts} />
+
+      {/* KPI comparison table */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h3 className="card-title">Outlet KPI comparison</h3>
+            <p className="page-subtitle" style={{ marginTop: 4 }}>
+              Sales vs Food% vs Labor% vs EBITDA%. Uses filtered data.
+            </p>
+          </div>
+          <button type="button" className="secondary-btn" onClick={exportKpiCsv} disabled={!kpiComparison.length}>
+            Export CSV
+          </button>
+        </div>
+        <div className="table-wrapper" style={{ marginTop: 8 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Outlet</th>
+                <th>Brand</th>
+                <th>Sales (JOD)</th>
+                <th>Food %</th>
+                <th>Labor %</th>
+                <th>EBITDA (JOD)</th>
+                <th>EBITDA %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {kpiComparison.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>No data for current filters.</td>
+                </tr>
+              ) : (
+                kpiComparison.map((r) => (
+                  <tr key={r.outlet}>
+                    <td>{r.outlet}</td>
+                    <td>{r.brand}</td>
+                    <td>{r.sales.toFixed(3)}</td>
+                    <td>{percent(r.foodPct)}</td>
+                    <td>{percent(r.laborPct)}</td>
+                    <td>{r.ebitda.toFixed(3)}</td>
+                    <td>{percent(r.ebitdaMargin)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* Outlet comparison mini-cards */}
       {ebitdaByOutlet.length > 0 && (
