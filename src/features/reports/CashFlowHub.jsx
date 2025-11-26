@@ -11,6 +11,7 @@ import {
   Legend,
   AreaChart,
   Area,
+  ReferenceLine,
 } from "recharts";
 
 // -------- Helpers --------
@@ -338,6 +339,40 @@ function CashFlowHub() {
 
   const { forecastRows, worstBalance, crunchCount, firstCrunchLabel } =
     forecastInfo;
+
+  function exportForecastCsv() {
+    if (!forecastRows.length) return;
+    const header = [
+      "Month",
+      "Sales in",
+      "Suppliers out",
+      "Rent & Opex out",
+      "Labor out",
+      "Petty out",
+      "Net cash",
+      "Balance after",
+    ];
+    const rows = forecastRows.map((r) => [
+      r.label,
+      r.salesIn,
+      r.purchasesOut,
+      r.rentOut,
+      r.laborOut,
+      r.pettyOut,
+      r.netCash,
+      r.balanceAfter,
+    ]);
+    const csv = [header, ...rows]
+      .map((line) => line.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "cashflow-forecast.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const forecastNetChartData = useMemo(() => {
     if (monthlyActual.length === 0 && forecastRows.length === 0) return [];
@@ -681,6 +716,13 @@ function CashFlowHub() {
           cash (forecast). Use this to see if the business is consistently
           cash-negative and how long your runway is.
         </p>
+        {forecastRows.length > 0 && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+            <button type="button" className="secondary-btn" onClick={exportForecastCsv}>
+              Download forecast CSV
+            </button>
+          </div>
+        )}
 
         <div style={{ height: 300, marginTop: 10 }}>
           {forecastNetChartData.length === 0 ? (
@@ -696,6 +738,12 @@ function CashFlowHub() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
+                <ReferenceLine
+                  y={minBuffer || 0}
+                  label="Min buffer"
+                  stroke="#dc2626"
+                  strokeDasharray="4 2"
+                />
                 <Line
                   type="monotone"
                   dataKey="netActual"
@@ -741,6 +789,12 @@ function CashFlowHub() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
+                <ReferenceLine
+                  y={minBuffer || 0}
+                  label="Min buffer"
+                  stroke="#dc2626"
+                  strokeDasharray="4 2"
+                />
                 <Line
                   type="monotone"
                   dataKey="balance"

@@ -165,6 +165,23 @@ function SupplierPerformanceHub() {
     return rows.slice(0, 10);
   }, [filtered]);
 
+  function exportTopItemsCsv() {
+    const top5 = topItems.slice(0, 5);
+    if (!top5.length) return;
+    const header = ["Item", "Supplier", "Total spend", "Lines"];
+    const rows = top5.map((r) => [r.itemName, r.supplier, r.totalSpend, r.lines]);
+    const csv = [header, ...rows]
+      .map((line) => line.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "top-items.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // -------- Price trend & alerts ----------
   const priceAlerts = useMemo(() => {
     const groups = {};
@@ -510,6 +527,13 @@ function SupplierPerformanceHub() {
           Items with the highest purchasing spend (requires item-level fields in
           your purchases data such as item/itemName/ingredient).
         </p>
+        {topItems.length > 0 && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+            <button type="button" className="secondary-btn" onClick={exportTopItemsCsv}>
+              Export top 5 CSV
+            </button>
+          </div>
+        )}
         <div className="table-wrapper" style={{ marginTop: 8 }}>
           <table>
             <thead>
