@@ -702,7 +702,7 @@ function ReportsHub() {
         mode: "report",
         payload: scopePayload,
         question:
-          `You are an ops advisor. Scope: ${opsAdvisorScope}. Return markdown with sections: ## Snapshot, ## Tables (at least one markdown table with KPI | Value | Comment), ## Risks, ## Actions (5 bullets). Keep concise, numbers with currency/% where relevant.`,
+          `You are an ops advisor. Scope: ${opsAdvisorScope}. Return markdown with sections: ## Snapshot, ## Tables (at least one markdown table with KPI | Value | Comment), ## Risks, ## Actions (5 bullets). Keep concise, numbers with currency/% where relevant. Add one short recommendation specific to outlet/brand filters if present.`,
       });
       setOpsAdvisorText(res.text || "");
       setOpsAdvisorModel(res.model || "");

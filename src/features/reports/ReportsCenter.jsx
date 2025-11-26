@@ -195,6 +195,7 @@ export default function ReportsCenter() {
   const [totals, setTotals] = useState({});
   const [totalsLoading, setTotalsLoading] = useState(false);
   const [totalsError, setTotalsError] = useState("");
+  const [lastRefreshed, setLastRefreshed] = useState("");
   const [health, setHealth] = useState(null);
   const [selected, setSelected] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -231,39 +232,41 @@ export default function ReportsCenter() {
       });
   }, [query, category, iconOverrides]);
 
-  // NEW: totals cards (cloud summaries)
-  useEffect(() => {
+  // NEW: totals cards (cloud summaries) + refresh + data source badge
+  const loadTotals = async () => {
     if (!API_BASE) return;
-    const load = async () => {
-      setTotalsLoading(true);
-      setTotalsError("");
-      try {
-        const endpoints = [
-          { key: "sales", path: "/api/reports/sales-summary" },
-          { key: "purchases", path: "/api/reports/purchases-summary" },
-          { key: "waste", path: "/api/reports/waste-summary" },
-          { key: "hr", path: "/api/reports/hr-summary" },
-          { key: "rent", path: "/api/reports/rent-opex-summary" },
-          { key: "petty", path: "/api/reports/petty-cash-summary" },
-          { key: "inventory", path: "/api/reports/inventory-summary" },
-        ];
-        const result = {};
-        for (const ep of endpoints) {
-          try {
-            const data = await fetchJson(`${API_BASE}${ep.path}`);
-            result[ep.key] = data?.summary || {};
-          } catch (e) {
-            result[ep.key] = { error: e.message };
-          }
+    setTotalsLoading(true);
+    setTotalsError("");
+    try {
+      const endpoints = [
+        { key: "sales", path: "/api/reports/sales-summary" },
+        { key: "purchases", path: "/api/reports/purchases-summary" },
+        { key: "waste", path: "/api/reports/waste-summary" },
+        { key: "hr", path: "/api/reports/hr-summary" },
+        { key: "rent", path: "/api/reports/rent-opex-summary" },
+        { key: "petty", path: "/api/reports/petty-cash-summary" },
+        { key: "inventory", path: "/api/reports/inventory-summary" },
+      ];
+      const result = {};
+      for (const ep of endpoints) {
+        try {
+          const data = await fetchJson(`${API_BASE}${ep.path}`);
+          result[ep.key] = data?.summary || {};
+        } catch (e) {
+          result[ep.key] = { error: e.message };
         }
-        setTotals(result);
-      } catch (e) {
-        setTotalsError(e.message || "Failed to load summaries");
-      } finally {
-        setTotalsLoading(false);
       }
-    };
-    load();
+      setTotals(result);
+      setLastRefreshed(new Date().toISOString());
+    } catch (e) {
+      setTotalsError(e.message || "Failed to load summaries");
+    } finally {
+      setTotalsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTotals();
   }, []);
 
   // NEW: health/debug info for AI and API
@@ -391,6 +394,32 @@ export default function ReportsCenter() {
           <div style={{ color: "#b91c1c" }}>{totalsError}</div>
         ) : (
           <>
+            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontSize: 12,
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  background: "#ecfeff",
+                  color: "#0ea5e9",
+                  border: "1px solid #bae6fd",
+                }}
+              >
+                Data source: cloud summaries
+              </span>
+              {lastRefreshed && (
+                <span style={{ fontSize: 12, color: "#475569" }}>Last refreshed: {lastRefreshed}</span>
+              )}
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={loadTotals}
+                disabled={totalsLoading}
+                style={{ padding: "4px 8px", fontSize: 12 }}
+              >
+                {totalsLoading ? "Refreshing..." : "Refresh from cloud"}
+              </button>
+            </div>
             <SummaryTile label="Net sales" value={totals.sales?.netsales || totals.sales?.netSales} color="#4f46e5" loading={totalsLoading} />
             <SummaryTile label="EBITDA" value={totals.sales?.ebitda || totals.sales?.ebitdaValue} color="#16a34a" loading={totalsLoading} />
             <SummaryTile label="Purchases" value={totals.purchases?.totalcost || totals.purchases?.totalCost} color="#f97316" loading={totalsLoading} />
