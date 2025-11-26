@@ -133,6 +133,30 @@ function HrHub() {
     [employees]
   );
 
+  // NEW: Attendance aggregates for summary chips and quick lists
+  const attendanceAgg = useMemo(() => {
+    const map = new Map();
+    attendance.forEach((a) => {
+      const key = a.employeeId || a.employeeName || "Unknown";
+      if (!map.has(key)) {
+        map.set(key, {
+          employeeId: a.employeeId,
+          employeeName: a.employeeName || a.employeeId || "Unknown",
+          totalHours: 0,
+          overtimeHours: 0,
+        });
+      }
+      const ref = map.get(key);
+      ref.totalHours += Number(a.totalHours || 0);
+      ref.overtimeHours += Number(a.overtimeHours || 0);
+    });
+    const rows = Array.from(map.values());
+    const topOt = [...rows].sort((a, b) => (b.overtimeHours || 0) - (a.overtimeHours || 0)).slice(0, 3);
+    const lowAttendance = [...rows].sort((a, b) => (a.totalHours || 0) - (b.totalHours || 0)).slice(0, 3);
+    const totalHours = rows.reduce((sum, r) => sum + (r.totalHours || 0), 0);
+    return { rows, topOt, lowAttendance, totalHours };
+  }, [attendance]);
+
   // API helpers
   async function apiGet(path) {
     const resp = await fetch(`${API_BASE}${path}`);
@@ -615,6 +639,29 @@ function HrHub() {
         </div>
       </div>
 
+      {/* NEW: Attendance summary chips */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          gap: 8,
+          marginTop: 8,
+        }}
+      >
+        <div className="card">
+          <div className="page-subtitle">Total hours (current filters)</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{attendanceAgg.totalHours.toFixed(2)}</div>
+        </div>
+        <div className="card">
+          <div className="page-subtitle">Labor % of sales</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>
+            {laborKpi?.summary?.laborCostPctOfSales != null
+              ? `${laborKpi.summary.laborCostPctOfSales.toFixed(1)}%`
+              : "-"}
+          </div>
+        </div>
+      </div>
+
       <div className="card" style={{ border: "1px dashed #cbd5e1", marginTop: 12 }}>
         <h4 className="card-title">Add shift</h4>
         <div className="form-grid">
@@ -744,6 +791,50 @@ function HrHub() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* NEW: OT / low attendance quick lists */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 10,
+          marginTop: 12,
+        }}
+      >
+        <div className="card">
+          <div className="page-subtitle" style={{ fontWeight: 700, marginBottom: 4 }}>
+            Top OT (by hours)
+          </div>
+          {attendanceAgg.topOt.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#6b7280" }}>No overtime data.</div>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13 }}>
+              {attendanceAgg.topOt.map((r) => (
+                <li key={r.employeeId || r.employeeName}>
+                  {r.employeeName} — OT {r.overtimeHours.toFixed(1)}h
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="page-subtitle" style={{ fontWeight: 700, marginBottom: 4 }}>
+            Low attendance
+          </div>
+          {attendanceAgg.lowAttendance.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#6b7280" }}>No attendance data.</div>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13 }}>
+              {attendanceAgg.lowAttendance.map((r) => (
+                <li key={r.employeeId || r.employeeName}>
+                  {r.employeeName} — {r.totalHours.toFixed(1)}h
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -891,6 +982,26 @@ function HrHub() {
     <div className="card">
       <h3 className="card-title">SOP & Training</h3>
       <Info text="Assign SOPs to employees and capture acknowledgments. Everything stays in-app (no popups)." />
+      {/* NEW: SOP compliance badge */}
+      {sopAssignments.length > 0 && (
+        <div className="card" style={{ marginTop: 8, padding: 10, borderLeft: "4px solid #0ea5e9" }}>
+          <div className="page-subtitle" style={{ marginBottom: 4 }}>
+            SOP compliance
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 700 }}>
+            {(() => {
+              const assigned = sopAssignments.length;
+              const ack = sopAssignments.filter((a) => a.status === "Acknowledged" || a.acknowledgedDate).length;
+              const pct = assigned > 0 ? ((ack / assigned) * 100).toFixed(1) : "0.0";
+              return `${pct}% acknowledged`;
+            })()}
+          </div>
+          <div style={{ fontSize: 12, color: "#475569" }}>
+            Assigned: {sopAssignments.length} | Acknowledged:{" "}
+            {sopAssignments.filter((a) => a.status === "Acknowledged" || a.acknowledgedDate).length}
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ border: "1px dashed #cbd5e1", marginBottom: 12 }}>
         <h4 className="card-title">Create new SOP</h4>
