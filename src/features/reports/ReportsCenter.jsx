@@ -11,15 +11,15 @@ const API_BASE =
 
 // Icon map (configurable via Admin > Report icons)
 const ICON_MAP = {
-  bar_chart: "BAR",
-  line_chart: "LINE",
-  pie_chart: "PIE",
-  labor: "LAB",
-  waste: "WST",
-  finance: "FIN",
-  inventory: "INV",
-  custom_star: "STAR",
-  custom_fire: "FIRE",
+  bar_chart: "📊",
+  line_chart: "📈",
+  pie_chart: "🧭",
+  labor: "🧑‍🍳",
+  waste: "♻️",
+  finance: "💰",
+  inventory: "📦",
+  custom_star: "⭐",
+  custom_fire: "🔥",
 };
 
 // Map report ids to exportable tables for quick CSV/XLSX shortcuts

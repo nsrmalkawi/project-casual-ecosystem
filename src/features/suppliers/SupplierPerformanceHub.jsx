@@ -1,5 +1,6 @@
 // src/features/suppliers/SupplierPerformanceHub.jsx
 import { useEffect, useMemo, useState } from "react";
+import { callAi } from "../../utils/aiClient";
 import {
   BarChart,
   Bar,
@@ -34,6 +35,9 @@ function SupplierPerformanceHub() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [priceAlertThreshold, setPriceAlertThreshold] = useState(10); // % increase
+  const [negotiationText, setNegotiationText] = useState("");
+  const [negotiationStatus, setNegotiationStatus] = useState("idle");
+  const [negotiationError, setNegotiationError] = useState("");
 
   useEffect(() => {
     setPurchases(loadArray("pc_purchases"));
@@ -165,22 +169,54 @@ function SupplierPerformanceHub() {
     return rows.slice(0, 10);
   }, [filtered]);
 
-  function exportTopItemsCsv() {
-    const top5 = topItems.slice(0, 5);
-    if (!top5.length) return;
-    const header = ["Item", "Supplier", "Total spend", "Lines"];
-    const rows = top5.map((r) => [r.itemName, r.supplier, r.totalSpend, r.lines]);
+function exportTopItemsCsv() {
+  const top5 = topItems.slice(0, 5);
+  if (!top5.length) return;
+  const header = ["Item", "Supplier", "Total spend", "Lines"];
+  const rows = top5.map((r) => [r.itemName, r.supplier, r.totalSpend, r.lines]);
     const csv = [header, ...rows]
       .map((line) => line.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
       .join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "top-items.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "top-items.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// NEW: AI supplier negotiation script (reuse COGS-style payload)
+async function generateNegotiationScript({
+  setStatus,
+  setError,
+  setText,
+  filtered,
+  supplierRows,
+  topItems,
+}) {
+  setStatus("loading");
+  setError("");
+  setText("");
+  try {
+    const res = await callAi({
+      mode: "report",
+      payload: {
+        scope: "supplier-negotiation",
+        suppliers: supplierRows.rows.slice(0, 5),
+        topItems: topItems.slice(0, 5),
+        samplePurchases: filtered.slice(0, 50),
+      },
+      question:
+        "Create a concise supplier negotiation script. Sections: ## Snapshot (top suppliers, spend), ## Levers (price/volume/terms), ## Concessions to request (3 bullets), ## Counter-points, ## Closing ask. Include one markdown table: Supplier | Current spend | Ask | Rationale.",
+    });
+    setText(res.text || "No script generated.");
+    setStatus("done");
+  } catch (err) {
+    setError(err.message || "AI request failed");
+    setStatus("error");
   }
+}
 
   // -------- Price trend & alerts ----------
   const priceAlerts = useMemo(() => {
@@ -562,10 +598,52 @@ function SupplierPerformanceHub() {
                   </tr>
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
+          </tbody>
+        </table>
       </div>
+    </div>
+
+    {/* NEW: AI negotiation script helper */}
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h3 className="card-title">AI: Supplier negotiation script</h3>
+      <p className="page-subtitle">
+        Uses your top suppliers/items to draft a concise negotiation script (price/volume/terms).
+      </p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <button
+          type="button"
+          className="secondary-btn"
+          disabled={negotiationStatus === "loading"}
+          onClick={() =>
+            generateNegotiationScript({
+              setStatus: setNegotiationStatus,
+              setError: setNegotiationError,
+              setText: setNegotiationText,
+              filtered,
+              supplierRows,
+              topItems,
+            })
+          }
+        >
+          {negotiationStatus === "loading" ? "Generating..." : "Generate negotiation script"}
+        </button>
+        {negotiationError && <span style={{ color: "#b91c1c", fontSize: 12 }}>{negotiationError}</span>}
+      </div>
+      {negotiationText && (
+        <div
+          style={{
+            whiteSpace: "pre-wrap",
+            background: "#f8fafc",
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            padding: 10,
+            fontSize: 13,
+          }}
+        >
+          {negotiationText}
+        </div>
+      )}
+    </div>
 
       {/* Price alerts */}
       <div className="card">
