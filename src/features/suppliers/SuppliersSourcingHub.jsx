@@ -65,6 +65,22 @@ const blankContact = {
   notes: "",
 };
 
+function sanitizePriceInput(value) {
+  if (value === null || value === undefined) return "";
+  const str = String(value).trim();
+  if (str === "") return "";
+  const num = Number(str);
+  return Number.isNaN(num) ? "" : num;
+}
+
+function formatPriceDisplay(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "";
+  const fixed = num.toFixed(3);
+  return fixed.replace(/\.?0+$/, "");
+}
+
 function SectionTabs({ active, onChange }) {
   const tabs = [
     { id: "comparison", label: "Supplier Comparison" },
@@ -1059,7 +1075,28 @@ function ComparisonSection({ refreshKey }) {
 
   const updateRowField = (id, field, value) => {
     setRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, [field]: value, lowestPrice: computeLowest({ ...r, [field]: value }) } : r))
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const nextRow = { ...r, [field]: value };
+        nextRow.lowestPrice = computeLowest(nextRow);
+        return nextRow;
+      })
+    );
+  };
+
+  const updatePriceField = (id, field, raw, { formatOnBlur = false } = {}) => {
+    const cleaned = sanitizePriceInput(raw);
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const nextVal = cleaned === "" ? "" : cleaned;
+        const nextRow = { ...r, [field]: nextVal };
+        nextRow.lowestPrice = computeLowest(nextRow);
+        if (formatOnBlur && nextVal !== "") {
+          nextRow[field] = Number(nextVal.toFixed(3));
+        }
+        return nextRow;
+      })
     );
   };
 
@@ -1219,33 +1256,45 @@ function ComparisonSection({ refreshKey }) {
                     <td>{r.alternativeSupplier2}</td>
                     <td>{r.packSize}</td>
                     <td>{r.uom}</td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={r.priceSupplier1 ?? ""}
-                        onChange={(e) => updateRowField(r.id, "priceSupplier1", e.target.value)}
-                        style={isLowest(r.priceSupplier1) ? { fontWeight: 700, background: "#f8fafc" } : {}}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={r.priceSupplier2 ?? ""}
-                        onChange={(e) => updateRowField(r.id, "priceSupplier2", e.target.value)}
-                        style={isLowest(r.priceSupplier2) ? { fontWeight: 700, background: "#f8fafc" } : {}}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={r.priceSupplier3 ?? ""}
-                        onChange={(e) => updateRowField(r.id, "priceSupplier3", e.target.value)}
-                        style={isLowest(r.priceSupplier3) ? { fontWeight: 700, background: "#f8fafc" } : {}}
-                      />
-                    </td>
+                <td>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={formatPriceDisplay(r.priceSupplier1)}
+                    onChange={(e) => updatePriceField(r.id, "priceSupplier1", e.target.value)}
+                    onBlur={(e) => updatePriceField(r.id, "priceSupplier1", e.target.value, { formatOnBlur: true })}
+                    style={isLowest(r.priceSupplier1) ? { fontWeight: 700, background: "#f8fafc" } : {}}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={formatPriceDisplay(r.priceSupplier2)}
+                    onChange={(e) => updatePriceField(r.id, "priceSupplier2", e.target.value)}
+                    onBlur={(e) => updatePriceField(r.id, "priceSupplier2", e.target.value, { formatOnBlur: true })}
+                    style={isLowest(r.priceSupplier2) ? { fontWeight: 700, background: "#f8fafc" } : {}}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={formatPriceDisplay(r.priceSupplier3)}
+                    onChange={(e) => updatePriceField(r.id, "priceSupplier3", e.target.value)}
+                    onBlur={(e) => updatePriceField(r.id, "priceSupplier3", e.target.value, { formatOnBlur: true })}
+                    style={isLowest(r.priceSupplier3) ? { fontWeight: 700, background: "#f8fafc" } : {}}
+                  />
+                </td>
                     <td style={{ fontWeight: 700 }}>{computeLowest(r)}</td>
                     <td>
                       <input
@@ -1286,8 +1335,28 @@ function ComparisonSection({ refreshKey }) {
               <input
                 type={field.key.startsWith("price") || field.key === "lowestPrice" ? "number" : "text"}
                 step="0.01"
-                value={newRow[field.key] ?? ""}
-                onChange={(e) => setNewRow((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                min={field.key.startsWith("price") ? "0" : undefined}
+                inputMode={field.key.startsWith("price") ? "decimal" : undefined}
+                placeholder={field.key.startsWith("price") ? "0.00" : ""}
+                value={
+                  field.key.startsWith("price") || field.key === "lowestPrice"
+                    ? formatPriceDisplay(newRow[field.key])
+                    : newRow[field.key] ?? ""
+                }
+                onChange={(e) =>
+                  setNewRow((prev) => ({
+                    ...prev,
+                    [field.key]: field.key.startsWith("price") ? sanitizePriceInput(e.target.value) : e.target.value,
+                  }))
+                }
+                onBlur={(e) => {
+                  if (field.key.startsWith("price")) {
+                    setNewRow((prev) => ({
+                      ...prev,
+                      [field.key]: sanitizePriceInput(e.target.value) === "" ? "" : Number(e.target.value || 0),
+                    }));
+                  }
+                }}
               />
             </div>
           ))}

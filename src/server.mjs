@@ -83,6 +83,8 @@ const EXPORTABLE_TABLES = new Set([
   "supplier_kitchen_equipment",
   "supplier_packaging_disposables",
   "supplier_hotelware_ose",
+  // Action plan (3M)
+  "action_plan_3m",
 ]);
 
 // Cache rent_opex columns to keep inserts/selects compatible if the DB hasn't been migrated yet.
@@ -281,6 +283,53 @@ async function ensureSupplierTables() {
 if (pool) {
   ensureSupplierTables().catch((err) =>
     console.error("Supplier table bootstrap failed", err)
+  );
+}
+
+async function ensureActionPlanTable() {
+  if (!pool) return;
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS action_plan_3m (
+        id SERIAL PRIMARY KEY,
+        phase TEXT,
+        area TEXT,
+        action TEXT,
+        description TEXT,
+        kpi_metric TEXT,
+        kpi_target_m3 TEXT,
+        start_month TEXT,
+        start_week TEXT,
+        end_month TEXT,
+        end_week TEXT,
+        impact TEXT,
+        effort TEXT,
+        dependencies TEXT,
+        budget_estimate TEXT,
+        risk_blockers TEXT,
+        validation_method TEXT,
+        owner_name TEXT,
+        priority TEXT,
+        status TEXT,
+        comments TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_action_plan_match ON action_plan_3m (LOWER(phase), LOWER(area), LOWER(action), LOWER(owner_name), LOWER(start_month), LOWER(start_week))`
+    );
+  } catch (err) {
+    console.error("Failed to ensure action_plan_3m table", err);
+  } finally {
+    client.release();
+  }
+}
+
+if (pool) {
+  ensureActionPlanTable().catch((err) =>
+    console.error("Action plan table bootstrap failed", err)
   );
 }
 
@@ -2141,6 +2190,17 @@ const makeProductKey = (row) =>
     normalizeText(row.typicalProducts).toLowerCase(),
   ].join("|");
 
+function makeActionPlanKey(row) {
+  return [
+    normalizeText(row.phase).toLowerCase(),
+    normalizeText(row.area).toLowerCase(),
+    normalizeText(row.action).toLowerCase(),
+    normalizeText(row.owner).toLowerCase(),
+    normalizeText(row.startMonth).toLowerCase(),
+    normalizeText(row.startWeek).toLowerCase(),
+  ].join("|");
+}
+
 app.get("/api/suppliers/comparison", async (req, res) => {
   if (!pool) {
     return res
@@ -3434,6 +3494,479 @@ app.post("/api/suppliers/comparison/import", async (req, res) => {
   } catch (err) {
     console.error("Import parsing error:", err);
     res.status(500).json({ error: "IMPORT_PARSE_FAILED", message: err.message });
+  }
+});
+
+// --- Action Plan 3M ---
+
+function mapActionPlanRow(row) {
+  return {
+    phase: normalizeText(row.phase),
+    area: normalizeText(row.area),
+    action: normalizeText(row.action),
+    description: normalizeText(row.description),
+    kpiMetric: normalizeText(row.kpiMetric),
+    kpiTargetM3: normalizeText(row.kpiTargetM3),
+    startMonth: normalizeText(row.startMonth),
+    startWeek: normalizeText(row.startWeek),
+    endMonth: normalizeText(row.endMonth),
+    endWeek: normalizeText(row.endWeek),
+    impact: normalizeText(row.impact),
+    effort: normalizeText(row.effort),
+    dependencies: normalizeText(row.dependencies),
+    budgetEstimate: normalizeText(row.budgetEstimate),
+    riskBlockers: normalizeText(row.riskBlockers),
+    validationMethod: normalizeText(row.validationMethod),
+    owner: normalizeText(row.owner),
+    priority: normalizeText(row.priority),
+    status: normalizeText(row.status),
+    comments: normalizeText(row.comments),
+  };
+}
+
+app.get("/api/action-plan", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          phase,
+          area,
+          action,
+          description,
+          kpi_metric AS "kpiMetric",
+          kpi_target_m3 AS "kpiTargetM3",
+          start_month AS "startMonth",
+          start_week AS "startWeek",
+          end_month AS "endMonth",
+          end_week AS "endWeek",
+          impact,
+          effort,
+          dependencies,
+          budget_estimate AS "budgetEstimate",
+          risk_blockers AS "riskBlockers",
+          validation_method AS "validationMethod",
+          owner_name AS "owner",
+          priority,
+          status,
+          comments,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM action_plan_3m
+        ORDER BY created_at DESC NULLS LAST
+      `
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch action_plan_3m error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/action-plan", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  const row = mapActionPlanRow(req.body || {});
+  if (!row.phase || !row.area || !row.action || !row.owner || !row.startMonth || !row.startWeek || !row.status) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+  try {
+    const { rows: inserted } = await pool.query(
+      `
+        INSERT INTO action_plan_3m (
+          phase, area, action, description, kpi_metric, kpi_target_m3,
+          start_month, start_week, end_month, end_week, impact, effort,
+          dependencies, budget_estimate, risk_blockers, validation_method,
+          owner_name, priority, status, comments
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+        )
+        RETURNING id
+      `,
+      [
+        row.phase,
+        row.area,
+        row.action,
+        row.description || null,
+        row.kpiMetric || null,
+        row.kpiTargetM3 || null,
+        row.startMonth,
+        row.startWeek,
+        row.endMonth || null,
+        row.endWeek || null,
+        row.impact || null,
+        row.effort || null,
+        row.dependencies || null,
+        row.budgetEstimate || null,
+        row.riskBlockers || null,
+        row.validationMethod || null,
+        row.owner,
+        row.priority || null,
+        row.status,
+        row.comments || null,
+      ]
+    );
+    res.json({ ok: true, id: inserted[0]?.id });
+  } catch (err) {
+    console.error("Insert action_plan_3m error:", err);
+    res.status(500).json({ error: "INSERT_FAILED", message: err.message });
+  }
+});
+
+app.patch("/api/action-plan/:id", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  const { id } = req.params;
+  const row = mapActionPlanRow(req.body || {});
+  try {
+    await pool.query(
+      `
+        UPDATE action_plan_3m
+        SET phase=$1, area=$2, action=$3, description=$4, kpi_metric=$5, kpi_target_m3=$6,
+            start_month=$7, start_week=$8, end_month=$9, end_week=$10, impact=$11, effort=$12,
+            dependencies=$13, budget_estimate=$14, risk_blockers=$15, validation_method=$16,
+            owner_name=$17, priority=$18, status=$19, comments=$20, updated_at=NOW()
+        WHERE id=$21
+      `,
+      [
+        row.phase || null,
+        row.area || null,
+        row.action || null,
+        row.description || null,
+        row.kpiMetric || null,
+        row.kpiTargetM3 || null,
+        row.startMonth || null,
+        row.startWeek || null,
+        row.endMonth || null,
+        row.endWeek || null,
+        row.impact || null,
+        row.effort || null,
+        row.dependencies || null,
+        row.budgetEstimate || null,
+        row.riskBlockers || null,
+        row.validationMethod || null,
+        row.owner || null,
+        row.priority || null,
+        row.status || null,
+        row.comments || null,
+        id,
+      ]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Update action_plan_3m error:", err);
+    res.status(500).json({ error: "UPDATE_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/action-plan/import-excel", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { fileBase64, fileName, previewOnly = false } = req.body || {};
+  if (!fileBase64) {
+    return res.status(400).json({ error: "MISSING_FILE", message: "fileBase64 is required" });
+  }
+
+  try {
+    const buffer = Buffer.from(fileBase64, "base64");
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sheet = wb.getWorksheet("Sheet1");
+    if (!sheet) {
+      return res.status(400).json({ error: "MISSING_SHEET", message: "Sheet1 not found" });
+    }
+
+    const headers = [
+      "Phase",
+      "Area",
+      "Action",
+      "Description",
+      "KPI Metric",
+      "KPI Target by Month 3",
+      "Start Month",
+      "Start Week",
+      "End Month",
+      "End Week",
+      "Impact (H/M/L)",
+      "Effort / Complexity (H/M/L)",
+      "Dependencies",
+      "Budget / Cost Estimate",
+      "Risk / Blockers",
+      "Validation Method",
+      "Owner",
+      "Priority",
+      "Status",
+      "Comments",
+    ];
+
+    const headerMap = {};
+    sheet.getRow(2).eachCell((cell, col) => {
+      const key = normalizeText(cell.value);
+      if (key) headerMap[key] = col;
+    });
+
+    const missing = headers.filter((h) => !headerMap[h]);
+    if (missing.length) {
+      return res
+        .status(400)
+        .json({ error: "INVALID_HEADERS", message: `Missing columns: ${missing.join(", ")}` });
+    }
+
+    const rows = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber <= 2) return; // skip desc + headers
+      const get = (header) => {
+        const col = headerMap[header];
+        if (!col) return "";
+        const val = row.getCell(col).value;
+        if (val && typeof val === "object" && val.text) return val.text;
+        if (val && typeof val === "object" && val.result !== undefined) return val.result;
+        return val ?? "";
+      };
+
+      const mapped = {
+        phase: get("Phase"),
+        area: get("Area"),
+        action: get("Action"),
+        description: get("Description"),
+        kpiMetric: get("KPI Metric"),
+        kpiTargetM3: get("KPI Target by Month 3"),
+        startMonth: get("Start Month"),
+        startWeek: get("Start Week"),
+        endMonth: get("End Month"),
+        endWeek: get("End Week"),
+        impact: get("Impact (H/M/L)"),
+        effort: get("Effort / Complexity (H/M/L)"),
+        dependencies: get("Dependencies"),
+        budgetEstimate: get("Budget / Cost Estimate"),
+        riskBlockers: get("Risk / Blockers"),
+        validationMethod: get("Validation Method"),
+        owner: get("Owner"),
+        priority: get("Priority"),
+        status: get("Status"),
+        comments: get("Comments"),
+        _rowNumber: rowNumber,
+      };
+
+      const requiredFields = [
+        mapped.phase,
+        mapped.area,
+        mapped.action,
+        mapped.owner,
+        mapped.startMonth,
+        mapped.startWeek,
+        mapped.status,
+      ];
+      if (requiredFields.some((v) => !normalizeText(v))) {
+        rows.push({ ...mapped, _skip: true, _reason: "Missing required fields" });
+      } else {
+        rows.push(mapped);
+      }
+    });
+
+    const client = await pool.connect();
+    const summary = { insertedCount: 0, updatedCount: 0, skippedCount: 0, errors: [] };
+    const previewRows = [];
+
+    try {
+      if (!previewOnly) {
+        await client.query("BEGIN");
+      }
+
+      // existing map
+      const existing = await client.query(
+        `SELECT id, phase, area, action, owner_name, start_month, start_week FROM action_plan_3m`
+      );
+      const existingMap = new Map();
+      existing.rows.forEach((r) =>
+        existingMap.set(
+          makeActionPlanKey({
+            phase: r.phase,
+            area: r.area,
+            action: r.action,
+            owner: r.owner_name,
+            startMonth: r.start_month,
+            startWeek: r.start_week,
+          }),
+          r.id
+        )
+      );
+
+      for (const mapped of rows) {
+        if (mapped._skip) {
+          summary.skippedCount += 1;
+          summary.errors.push({ row: mapped._rowNumber, reason: mapped._reason });
+          continue;
+        }
+        const key = makeActionPlanKey(mapped);
+        const payload = mapActionPlanRow(mapped);
+        const existingId = existingMap.get(key);
+        if (existingId) {
+          summary.updatedCount += 1;
+          if (!previewOnly) {
+            await client.query(
+              `
+                UPDATE action_plan_3m
+                SET phase=$1, area=$2, action=$3, description=$4, kpi_metric=$5, kpi_target_m3=$6,
+                    start_month=$7, start_week=$8, end_month=$9, end_week=$10, impact=$11, effort=$12,
+                    dependencies=$13, budget_estimate=$14, risk_blockers=$15, validation_method=$16,
+                    owner_name=$17, priority=$18, status=$19, comments=$20, updated_at=NOW()
+                WHERE id=$21
+              `,
+              [
+                payload.phase,
+                payload.area,
+                payload.action,
+                payload.description || null,
+                payload.kpiMetric || null,
+                payload.kpiTargetM3 || null,
+                payload.startMonth || null,
+                payload.startWeek || null,
+                payload.endMonth || null,
+                payload.endWeek || null,
+                payload.impact || null,
+                payload.effort || null,
+                payload.dependencies || null,
+                payload.budgetEstimate || null,
+                payload.riskBlockers || null,
+                payload.validationMethod || null,
+                payload.owner || null,
+                payload.priority || null,
+                payload.status || null,
+                payload.comments || null,
+                existingId,
+              ]
+            );
+          }
+        } else {
+          summary.insertedCount += 1;
+          if (!previewOnly) {
+            await client.query(
+              `
+                INSERT INTO action_plan_3m (
+                  phase, area, action, description, kpi_metric, kpi_target_m3,
+                  start_month, start_week, end_month, end_week, impact, effort,
+                  dependencies, budget_estimate, risk_blockers, validation_method,
+                  owner_name, priority, status, comments
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+              `,
+              [
+                payload.phase,
+                payload.area,
+                payload.action,
+                payload.description || null,
+                payload.kpiMetric || null,
+                payload.kpiTargetM3 || null,
+                payload.startMonth || null,
+                payload.startWeek || null,
+                payload.endMonth || null,
+                payload.endWeek || null,
+                payload.impact || null,
+                payload.effort || null,
+                payload.dependencies || null,
+                payload.budgetEstimate || null,
+                payload.riskBlockers || null,
+                payload.validationMethod || null,
+                payload.owner || null,
+                payload.priority || null,
+                payload.status || null,
+                payload.comments || null,
+              ]
+            );
+          }
+        }
+
+        if (previewRows.length < 50) {
+          previewRows.push({
+            phase: mapped.phase,
+            area: mapped.area,
+            action: mapped.action,
+            owner: mapped.owner,
+            status: mapped.status,
+            priority: mapped.priority,
+            start: `${mapped.startMonth} / ${mapped.startWeek}`,
+            end: `${mapped.endMonth} / ${mapped.endWeek}`,
+          });
+        }
+      }
+
+      if (!previewOnly) {
+        await client.query("COMMIT");
+      }
+
+      res.json({
+        ok: true,
+        fileName: fileName || null,
+        insertedCount: summary.insertedCount,
+        updatedCount: summary.updatedCount,
+        skippedCount: summary.skippedCount,
+        errors: summary.errors,
+        previewRows,
+        totalRows: rows.length,
+      });
+    } catch (err) {
+      if (!previewOnly) {
+        await client.query("ROLLBACK");
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("Action plan import error:", err);
+    res.status(500).json({ error: "IMPORT_FAILED", message: err.message });
+  }
+});
+
+app.get("/api/action-plan/summary", async (_req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE status ILIKE 'completed%') AS completed,
+          COUNT(*) FILTER (WHERE status ILIKE 'in progress%') AS in_progress,
+          COUNT(*) FILTER (WHERE status ILIKE 'blocked%') AS blocked
+        FROM action_plan_3m
+      `
+    );
+
+    const matrix = await pool.query(
+      `
+        SELECT area, status, COUNT(*) as count
+        FROM action_plan_3m
+        GROUP BY area, status
+      `
+    );
+
+    res.json({
+      ok: true,
+      summary: rows[0] || {},
+      matrix: matrix.rows || [],
+    });
+  } catch (err) {
+    console.error("Action plan summary error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
   }
 });
 

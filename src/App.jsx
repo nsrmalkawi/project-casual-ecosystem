@@ -14,6 +14,7 @@ import SuppliersSourcingHub from "./features/suppliers/SuppliersSourcingHub";
 import ReconciliationHub from "./features/reconciliation/ReconciliationHub";
 import BrandingMarketingHub from "./features/branding/BrandingMarketingHub";
 import ActionPlanHub from "./features/action-plan/ActionPlanHub";
+import ActionPlan3M from "./features/action-plan/ActionPlan3M";
 import AdminHub from "./features/admin/AdminHub";
 import HrHub from "./features/hr/HrHub";
 import ExecutiveDashboard from "./features/dashboard/ExecutiveDashboard";
@@ -35,6 +36,7 @@ const NAV_ITEMS = [
   { id: "reconciliation", label: "Waste & Inventory Reconciliation", roles: ["admin", "manager"] },
   { id: "branding", label: "Branding & Marketing", roles: ["admin", "manager"] },
   { id: "action-plan", label: "Action Plan Tracker", roles: ["admin", "manager", "viewer"] },
+  { id: "action-plan-3m", label: "Action Plan (3M)", roles: ["admin", "manager", "viewer"] },
   { id: "hr", label: "HR & Staffing", roles: ["admin", "manager"] },
   { id: "admin", label: "Admin & Settings", roles: ["admin"] },
 ];
@@ -459,6 +461,7 @@ function App() {
               <BrandingMarketingHub />
             )}
 
+          {activeTab === "action-plan-3m" && <ActionPlan3M />}
           {activeTab === "hr" &&
             (role === "admin" || role === "manager") && <HrHub />}
 
