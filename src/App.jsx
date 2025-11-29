@@ -10,7 +10,7 @@ import MenuEngineeringHub from "./features/menu-engineering/MenuEngineeringHub";
 import RecipesManager from "./features/recipes/RecipesManager";
 import TargetsHub from "./features/targets/TargetsHub";
 import ScenarioPlanningHub from "./features/scenario-planning/ScenarioPlanningHub";
-import SupplierPerformanceHub from "./features/suppliers/SupplierPerformanceHub";
+import SuppliersSourcingHub from "./features/suppliers/SuppliersSourcingHub";
 import ReconciliationHub from "./features/reconciliation/ReconciliationHub";
 import BrandingMarketingHub from "./features/branding/BrandingMarketingHub";
 import ActionPlanHub from "./features/action-plan/ActionPlanHub";
@@ -31,7 +31,7 @@ const NAV_ITEMS = [
   { id: "recipes", label: "Recipes & Costing", roles: ["admin", "manager", "viewer"] },
   { id: "targets", label: "Targets / Budgets", roles: ["admin", "manager"] },
   { id: "scenario", label: "Scenario Planning", roles: ["admin", "manager"] },
-  { id: "suppliers", label: "Suppliers & Purchases", roles: ["admin", "manager"] },
+  { id: "suppliers", label: "Suppliers & Sourcing", roles: ["admin", "manager"] },
   { id: "reconciliation", label: "Waste & Inventory Reconciliation", roles: ["admin", "manager"] },
   { id: "branding", label: "Branding & Marketing", roles: ["admin", "manager"] },
   { id: "action-plan", label: "Action Plan Tracker", roles: ["admin", "manager", "viewer"] },
@@ -446,7 +446,7 @@ function App() {
 
           {activeTab === "suppliers" &&
             (role === "admin" || role === "manager") && (
-              <SupplierPerformanceHub />
+              <SuppliersSourcingHub />
             )}
 
           {activeTab === "reconciliation" &&

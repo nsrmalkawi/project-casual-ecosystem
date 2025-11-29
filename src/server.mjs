@@ -13,7 +13,7 @@ dotenv.config(); // Load environment variables from .env file
 
 const app = express();
 app.use(cors()); // Allow frontend to call the API from a different origin during dev/prod
-app.use(express.json({ limit: "5mb" })); // Parse JSON requests
+app.use(express.json({ limit: "10mb" })); // Parse JSON requests (bumped for supplier workbook imports)
 const port = process.env.PORT || 3001;
 
 // API key for the public Google AI endpoint (Gemini).
@@ -76,6 +76,13 @@ const EXPORTABLE_TABLES = new Set([
   "hr_assessments",
   "hr_sops",
   "hr_employee_sops",
+  // Suppliers & sourcing
+  "supplier_comparison",
+  "supplier_directory",
+  "supplier_contacts",
+  "supplier_kitchen_equipment",
+  "supplier_packaging_disposables",
+  "supplier_hotelware_ose",
 ]);
 
 // Cache rent_opex columns to keep inserts/selects compatible if the DB hasn't been migrated yet.
@@ -129,6 +136,152 @@ function deriveHourlyRate({ hourlyRate, monthlySalary }) {
     return monthly / STANDARD_MONTHLY_HOURS;
   }
   return 0;
+}
+
+// --- Suppliers & Sourcing helpers ---
+
+function normalizeText(value) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+function numberOrNull(value) {
+  const n = Number(value);
+  return Number.isNaN(n) ? null : n;
+}
+
+function computeLowestPrice({ price1, price2, price3, fallback }) {
+  const values = [price1, price2, price3]
+    .map((v) => numberOrNull(v))
+    .filter((v) => v !== null);
+  if (values.length === 0) return fallback ?? null;
+  return Math.min(...values);
+}
+
+async function ensureSupplierTables() {
+  if (!pool) return;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_directory (
+        id SERIAL PRIMARY KEY,
+        supplier_name TEXT NOT NULL UNIQUE,
+        main_categories TEXT,
+        type TEXT,
+        notes_strategy TEXT,
+        website TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_contacts (
+        id SERIAL PRIMARY KEY,
+        supplier_id INTEGER REFERENCES supplier_directory(id) ON DELETE SET NULL,
+        supplier_name TEXT NOT NULL,
+        address TEXT,
+        phone TEXT,
+        fax TEXT,
+        email TEXT,
+        website TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_supplier_contacts_supplier_name ON supplier_contacts (LOWER(supplier_name))`
+    );
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_comparison (
+        id SERIAL PRIMARY KEY,
+        category TEXT,
+        brand TEXT,
+        menu_section TEXT,
+        item TEXT NOT NULL,
+        spec_notes TEXT,
+        recommended_supplier TEXT,
+        alternative_supplier1 TEXT,
+        alternative_supplier2 TEXT,
+        pack_size TEXT,
+        uom TEXT,
+        price_supplier1 NUMERIC,
+        price_supplier2 NUMERIC,
+        price_supplier3 NUMERIC,
+        lowest_price NUMERIC,
+        chosen_supplier TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_supplier_comparison_lookup
+       ON supplier_comparison (LOWER(category), LOWER(brand), LOWER(menu_section), LOWER(item))`
+    );
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_kitchen_equipment (
+        id SERIAL PRIMARY KEY,
+        supplier_name TEXT NOT NULL,
+        main_category TEXT,
+        typical_products TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_supplier_kitchen_equipment_supplier ON supplier_kitchen_equipment (LOWER(supplier_name))`
+    );
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_packaging_disposables (
+        id SERIAL PRIMARY KEY,
+        supplier_name TEXT NOT NULL,
+        main_category TEXT,
+        typical_products TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_supplier_packaging_supplier ON supplier_packaging_disposables (LOWER(supplier_name))`
+    );
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_hotelware_ose (
+        id SERIAL PRIMARY KEY,
+        supplier_name TEXT NOT NULL,
+        main_category TEXT,
+        typical_products TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_supplier_hotelware_supplier ON supplier_hotelware_ose (LOWER(supplier_name))`
+    );
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Failed to ensure supplier tables", err);
+  } finally {
+    client.release();
+  }
+}
+
+if (pool) {
+  ensureSupplierTables().catch((err) =>
+    console.error("Supplier table bootstrap failed", err)
+  );
 }
 
 // --- Simple reporting endpoints ---
@@ -1959,6 +2112,1328 @@ app.post("/api/hr/sops/ack", async (req, res) => {
   } catch (err) {
     console.error("Acknowledge SOP error:", err);
     res.status(500).json({ error: "UPSERT_FAILED", message: err.message });
+  }
+});
+
+// --- Suppliers & Sourcing ---
+
+const makeComparisonKey = (row) =>
+  [
+    normalizeText(row.category).toLowerCase(),
+    normalizeText(row.brand).toLowerCase(),
+    normalizeText(row.menuSection).toLowerCase(),
+    normalizeText(row.item).toLowerCase(),
+  ].join("|");
+
+const makeDirectoryKey = (name) => normalizeText(name).toLowerCase();
+
+const makeContactKey = (row) =>
+  [
+    makeDirectoryKey(row.supplierName),
+    normalizeText(row.phone).toLowerCase(),
+    normalizeText(row.email).toLowerCase(),
+  ].join("|");
+
+const makeProductKey = (row) =>
+  [
+    makeDirectoryKey(row.supplierName),
+    normalizeText(row.mainCategory).toLowerCase(),
+    normalizeText(row.typicalProducts).toLowerCase(),
+  ].join("|");
+
+app.get("/api/suppliers/comparison", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { category, brand, menuSection, search } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (category) {
+    filters.push(`LOWER(COALESCE(category,'')) = LOWER($${idx++})`);
+    params.push(category);
+  }
+  if (brand) {
+    filters.push(`LOWER(COALESCE(brand,'')) = LOWER($${idx++})`);
+    params.push(brand);
+  }
+  if (menuSection) {
+    filters.push(`LOWER(COALESCE(menu_section,'')) = LOWER($${idx++})`);
+    params.push(menuSection);
+  }
+  if (search) {
+    filters.push(`LOWER(item) LIKE $${idx++}`);
+    params.push(`%${search.toLowerCase()}%`);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          category,
+          brand,
+          menu_section AS "menuSection",
+          item,
+          spec_notes AS "specNotes",
+          recommended_supplier AS "recommendedSupplier",
+          alternative_supplier1 AS "alternativeSupplier1",
+          alternative_supplier2 AS "alternativeSupplier2",
+          pack_size AS "packSize",
+          uom,
+          price_supplier1 AS "priceSupplier1",
+          price_supplier2 AS "priceSupplier2",
+          price_supplier3 AS "priceSupplier3",
+          lowest_price AS "lowestPrice",
+          chosen_supplier AS "chosenSupplier",
+          notes
+        FROM supplier_comparison
+        ${where}
+        ORDER BY category NULLS FIRST, brand NULLS FIRST, item ASC
+      `,
+      params
+    );
+
+    const hydrated = rows.map((r) => ({
+      ...r,
+      lowestPrice: computeLowestPrice({
+        price1: r.priceSupplier1,
+        price2: r.priceSupplier2,
+        price3: r.priceSupplier3,
+        fallback: r.lowestPrice,
+      }),
+    }));
+
+    res.json({ ok: true, rows: hydrated });
+  } catch (err) {
+    console.error("Fetch supplier_comparison error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/suppliers/comparison", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const {
+    id,
+    category,
+    brand,
+    menuSection,
+    item,
+    specNotes,
+    recommendedSupplier,
+    alternativeSupplier1,
+    alternativeSupplier2,
+    packSize,
+    uom,
+    priceSupplier1,
+    priceSupplier2,
+    priceSupplier3,
+    lowestPrice,
+    chosenSupplier,
+    notes,
+  } = req.body || {};
+
+  if (!item) {
+    return res.status(400).json({ error: "MISSING_FIELDS", message: "Item is required." });
+  }
+
+  const computedLowest = computeLowestPrice({
+    price1: priceSupplier1,
+    price2: priceSupplier2,
+    price3: priceSupplier3,
+    fallback: lowestPrice,
+  });
+
+  const client = await pool.connect();
+  try {
+    const keyCategory = normalizeText(category);
+    const keyBrand = normalizeText(brand);
+    const keyMenuSection = normalizeText(menuSection);
+    const keyItem = normalizeText(item);
+
+    const upsertParams = [
+      keyCategory,
+      keyBrand,
+      keyMenuSection,
+      keyItem,
+      specNotes || null,
+      recommendedSupplier || null,
+      alternativeSupplier1 || null,
+      alternativeSupplier2 || null,
+      packSize || null,
+      uom || null,
+      numberOrNull(priceSupplier1),
+      numberOrNull(priceSupplier2),
+      numberOrNull(priceSupplier3),
+      computedLowest,
+      chosenSupplier || null,
+      notes || null,
+    ];
+
+    let targetId = id;
+    if (!targetId) {
+      const existing = await client.query(
+        `
+          SELECT id
+          FROM supplier_comparison
+          WHERE LOWER(COALESCE(category,'')) = LOWER($1)
+            AND LOWER(COALESCE(brand,'')) = LOWER($2)
+            AND LOWER(COALESCE(menu_section,'')) = LOWER($3)
+            AND LOWER(item) = LOWER($4)
+          LIMIT 1
+        `,
+        [keyCategory, keyBrand, keyMenuSection, keyItem]
+      );
+      if (existing.rows.length) {
+        targetId = existing.rows[0].id;
+      }
+    }
+
+    if (targetId) {
+      await client.query(
+        `
+          UPDATE supplier_comparison
+          SET category=$1, brand=$2, menu_section=$3, item=$4,
+              spec_notes=$5, recommended_supplier=$6,
+              alternative_supplier1=$7, alternative_supplier2=$8,
+              pack_size=$9, uom=$10,
+              price_supplier1=$11, price_supplier2=$12, price_supplier3=$13,
+              lowest_price=$14, chosen_supplier=$15, notes=$16,
+              updated_at=NOW()
+          WHERE id=$17
+        `,
+        [...upsertParams, targetId]
+      );
+      return res.json({ ok: true, id: targetId, lowestPrice: computedLowest });
+    }
+
+    const { rows } = await client.query(
+      `
+        INSERT INTO supplier_comparison (
+          category, brand, menu_section, item, spec_notes,
+          recommended_supplier, alternative_supplier1, alternative_supplier2,
+          pack_size, uom, price_supplier1, price_supplier2, price_supplier3,
+          lowest_price, chosen_supplier, notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        RETURNING id
+      `,
+      upsertParams
+    );
+
+    res.json({ ok: true, id: rows[0]?.id, lowestPrice: computedLowest });
+  } catch (err) {
+    console.error("Upsert supplier_comparison error:", err);
+    res.status(500).json({ error: "UPSERT_FAILED", message: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/suppliers/directory", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { type, mainCategory, search } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (type) {
+    filters.push(`LOWER(COALESCE(type,'')) = LOWER($${idx++})`);
+    params.push(type);
+  }
+  if (mainCategory) {
+    filters.push(`LOWER(COALESCE(main_categories,'')) LIKE $${idx++}`);
+    params.push(`%${mainCategory.toLowerCase()}%`);
+  }
+  if (search) {
+    filters.push(
+      `(LOWER(supplier_name) LIKE $${idx} OR LOWER(COALESCE(notes_strategy,'')) LIKE $${idx})`
+    );
+    params.push(`%${search.toLowerCase()}%`);
+    idx += 1;
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          supplier_name AS "supplierName",
+          main_categories AS "mainCategories",
+          type,
+          notes_strategy AS "notesStrategy",
+          website
+        FROM supplier_directory
+        ${where}
+        ORDER BY supplier_name ASC
+      `,
+      params
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch supplier_directory error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/suppliers/directory", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { id, supplierName, mainCategories, type, notesStrategy, website } = req.body || {};
+  if (!supplierName) {
+    return res.status(400).json({ error: "MISSING_FIELDS", message: "Supplier name is required." });
+  }
+
+  const nameKey = makeDirectoryKey(supplierName);
+  const client = await pool.connect();
+
+  try {
+    let targetId = id;
+    if (!targetId) {
+      const existing = await client.query(
+        `SELECT id FROM supplier_directory WHERE LOWER(supplier_name) = $1 LIMIT 1`,
+        [nameKey]
+      );
+      if (existing.rows.length) {
+        targetId = existing.rows[0].id;
+      }
+    }
+
+    if (targetId) {
+      await client.query(
+        `
+          UPDATE supplier_directory
+          SET supplier_name=$1, main_categories=$2, type=$3,
+              notes_strategy=$4, website=$5, updated_at=NOW()
+          WHERE id=$6
+        `,
+        [supplierName, mainCategories || null, type || null, notesStrategy || null, website || null, targetId]
+      );
+      return res.json({ ok: true, id: targetId });
+    }
+
+    const { rows } = await client.query(
+      `
+        INSERT INTO supplier_directory (supplier_name, main_categories, type, notes_strategy, website)
+        VALUES ($1,$2,$3,$4,$5)
+        RETURNING id
+      `,
+      [supplierName, mainCategories || null, type || null, notesStrategy || null, website || null]
+    );
+    res.json({ ok: true, id: rows[0]?.id });
+  } catch (err) {
+    console.error("Upsert supplier_directory error:", err);
+    res.status(500).json({ error: "UPSERT_FAILED", message: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/suppliers/contacts", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { supplierName, search } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (supplierName) {
+    filters.push(`LOWER(c.supplier_name) = LOWER($${idx++})`);
+    params.push(supplierName);
+  }
+
+  if (search) {
+    filters.push(
+      `(LOWER(c.supplier_name) LIKE $${idx} OR LOWER(COALESCE(c.address,'')) LIKE $${idx} OR LOWER(COALESCE(c.notes,'')) LIKE $${idx})`
+    );
+    params.push(`%${search.toLowerCase()}%`);
+    idx += 1;
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")} ` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          c.id,
+          c.supplier_id AS "supplierId",
+          c.supplier_name AS "supplierName",
+          c.address,
+          c.phone,
+          c.fax,
+          c.email,
+          c.website,
+          c.notes,
+          d.main_categories AS "directoryCategories",
+          d.type AS "directoryType"
+        FROM supplier_contacts c
+        LEFT JOIN supplier_directory d ON d.id = c.supplier_id
+        ${where}
+        ORDER BY c.supplier_name ASC, c.id DESC
+      `,
+      params
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch supplier_contacts error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/suppliers/contacts", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { id, supplierName, address, phone, fax, email, website, notes } = req.body || {};
+  if (!supplierName) {
+    return res.status(400).json({ error: "MISSING_FIELDS", message: "Supplier name is required." });
+  }
+
+  const nameKey = makeDirectoryKey(supplierName);
+  const client = await pool.connect();
+
+  try {
+    const directoryLookup = await client.query(
+      `SELECT id FROM supplier_directory WHERE LOWER(supplier_name) = $1 LIMIT 1`,
+      [nameKey]
+    );
+    const supplierId = directoryLookup.rows[0]?.id || null;
+
+    if (id) {
+      await client.query(
+        `
+          UPDATE supplier_contacts
+          SET supplier_id=$1, supplier_name=$2, address=$3, phone=$4, fax=$5, email=$6, website=$7, notes=$8, updated_at=NOW()
+          WHERE id=$9
+        `,
+        [supplierId, supplierName, address || null, phone || null, fax || null, email || null, website || null, notes || null, id]
+      );
+      return res.json({ ok: true, id });
+    }
+
+    const { rows } = await client.query(
+      `
+        INSERT INTO supplier_contacts (supplier_id, supplier_name, address, phone, fax, email, website, notes)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        RETURNING id
+      `,
+      [supplierId, supplierName, address || null, phone || null, fax || null, email || null, website || null, notes || null]
+    );
+    res.json({ ok: true, id: rows[0]?.id });
+  } catch (err) {
+    console.error("Upsert supplier_contacts error:", err);
+    res.status(500).json({ error: "UPSERT_FAILED", message: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/suppliers/kitchen-equipment", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { mainCategory, search } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (mainCategory) {
+    filters.push(`LOWER(COALESCE(main_category,'')) = LOWER($${idx++})`);
+    params.push(mainCategory);
+  }
+  if (search) {
+    filters.push(
+      `(LOWER(supplier_name) LIKE $${idx} OR LOWER(COALESCE(typical_products,'')) LIKE $${idx})`
+    );
+    params.push(`%${search.toLowerCase()}%`);
+    idx += 1;
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          supplier_name AS "supplierName",
+          main_category AS "mainCategory",
+          typical_products AS "typicalProducts",
+          notes
+        FROM supplier_kitchen_equipment
+        ${where}
+        ORDER BY supplier_name ASC
+      `,
+      params
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch supplier_kitchen_equipment error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/suppliers/kitchen-equipment", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { id, supplierName, mainCategory, typicalProducts, notes } = req.body || {};
+  if (!supplierName) {
+    return res.status(400).json({ error: "MISSING_FIELDS", message: "Supplier name is required." });
+  }
+
+  const client = await pool.connect();
+  try {
+    if (id) {
+      await client.query(
+        `
+          UPDATE supplier_kitchen_equipment
+          SET supplier_name=$1, main_category=$2, typical_products=$3, notes=$4, updated_at=NOW()
+          WHERE id=$5
+        `,
+        [supplierName, mainCategory || null, typicalProducts || null, notes || null, id]
+      );
+      return res.json({ ok: true, id });
+    }
+
+    const existing = await client.query(
+      `
+        SELECT id
+        FROM supplier_kitchen_equipment
+        WHERE LOWER(supplier_name)=LOWER($1)
+          AND LOWER(COALESCE(main_category,'')) = LOWER($2)
+          AND LOWER(COALESCE(typical_products,'')) = LOWER($3)
+        LIMIT 1
+      `,
+      [supplierName, mainCategory || "", typicalProducts || ""]
+    );
+
+    if (existing.rows.length) {
+      const existingId = existing.rows[0].id;
+      await client.query(
+        `
+          UPDATE supplier_kitchen_equipment
+          SET supplier_name=$1, main_category=$2, typical_products=$3, notes=$4, updated_at=NOW()
+          WHERE id=$5
+        `,
+        [supplierName, mainCategory || null, typicalProducts || null, notes || null, existingId]
+      );
+      return res.json({ ok: true, id: existingId });
+    }
+
+    const { rows } = await client.query(
+      `
+        INSERT INTO supplier_kitchen_equipment (supplier_name, main_category, typical_products, notes)
+        VALUES ($1,$2,$3,$4)
+        RETURNING id
+      `,
+      [supplierName, mainCategory || null, typicalProducts || null, notes || null]
+    );
+    res.json({ ok: true, id: rows[0]?.id });
+  } catch (err) {
+    console.error("Upsert supplier_kitchen_equipment error:", err);
+    res.status(500).json({ error: "UPSERT_FAILED", message: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/suppliers/packaging-disposables", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { mainCategory, search } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (mainCategory) {
+    filters.push(`LOWER(COALESCE(main_category,'')) = LOWER($${idx++})`);
+    params.push(mainCategory);
+  }
+  if (search) {
+    filters.push(
+      `(LOWER(supplier_name) LIKE $${idx} OR LOWER(COALESCE(typical_products,'')) LIKE $${idx})`
+    );
+    params.push(`%${search.toLowerCase()}%`);
+    idx += 1;
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          supplier_name AS "supplierName",
+          main_category AS "mainCategory",
+          typical_products AS "typicalProducts",
+          notes
+        FROM supplier_packaging_disposables
+        ${where}
+        ORDER BY supplier_name ASC
+      `,
+      params
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch supplier_packaging_disposables error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/suppliers/packaging-disposables", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { id, supplierName, mainCategory, typicalProducts, notes } = req.body || {};
+  if (!supplierName) {
+    return res.status(400).json({ error: "MISSING_FIELDS", message: "Supplier name is required." });
+  }
+
+  const client = await pool.connect();
+  try {
+    if (id) {
+      await client.query(
+        `
+          UPDATE supplier_packaging_disposables
+          SET supplier_name=$1, main_category=$2, typical_products=$3, notes=$4, updated_at=NOW()
+          WHERE id=$5
+        `,
+        [supplierName, mainCategory || null, typicalProducts || null, notes || null, id]
+      );
+      return res.json({ ok: true, id });
+    }
+
+    const existing = await client.query(
+      `
+        SELECT id
+        FROM supplier_packaging_disposables
+        WHERE LOWER(supplier_name)=LOWER($1)
+          AND LOWER(COALESCE(main_category,'')) = LOWER($2)
+          AND LOWER(COALESCE(typical_products,'')) = LOWER($3)
+        LIMIT 1
+      `,
+      [supplierName, mainCategory || "", typicalProducts || ""]
+    );
+
+    if (existing.rows.length) {
+      const existingId = existing.rows[0].id;
+      await client.query(
+        `
+          UPDATE supplier_packaging_disposables
+          SET supplier_name=$1, main_category=$2, typical_products=$3, notes=$4, updated_at=NOW()
+          WHERE id=$5
+        `,
+        [supplierName, mainCategory || null, typicalProducts || null, notes || null, existingId]
+      );
+      return res.json({ ok: true, id: existingId });
+    }
+
+    const { rows } = await client.query(
+      `
+        INSERT INTO supplier_packaging_disposables (supplier_name, main_category, typical_products, notes)
+        VALUES ($1,$2,$3,$4)
+        RETURNING id
+      `,
+      [supplierName, mainCategory || null, typicalProducts || null, notes || null]
+    );
+    res.json({ ok: true, id: rows[0]?.id });
+  } catch (err) {
+    console.error("Upsert supplier_packaging_disposables error:", err);
+    res.status(500).json({ error: "UPSERT_FAILED", message: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/suppliers/hotelware-ose", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { mainCategory, search } = req.query || {};
+  const filters = [];
+  const params = [];
+  let idx = 1;
+
+  if (mainCategory) {
+    filters.push(`LOWER(COALESCE(main_category,'')) = LOWER($${idx++})`);
+    params.push(mainCategory);
+  }
+  if (search) {
+    filters.push(
+      `(LOWER(supplier_name) LIKE $${idx} OR LOWER(COALESCE(typical_products,'')) LIKE $${idx})`
+    );
+    params.push(`%${search.toLowerCase()}%`);
+    idx += 1;
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          supplier_name AS "supplierName",
+          main_category AS "mainCategory",
+          typical_products AS "typicalProducts",
+          notes
+        FROM supplier_hotelware_ose
+        ${where}
+        ORDER BY supplier_name ASC
+      `,
+      params
+    );
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("Fetch supplier_hotelware_ose error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+app.post("/api/suppliers/hotelware-ose", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { id, supplierName, mainCategory, typicalProducts, notes } = req.body || {};
+  if (!supplierName) {
+    return res.status(400).json({ error: "MISSING_FIELDS", message: "Supplier name is required." });
+  }
+
+  const client = await pool.connect();
+  try {
+    if (id) {
+      await client.query(
+        `
+          UPDATE supplier_hotelware_ose
+          SET supplier_name=$1, main_category=$2, typical_products=$3, notes=$4, updated_at=NOW()
+          WHERE id=$5
+        `,
+        [supplierName, mainCategory || null, typicalProducts || null, notes || null, id]
+      );
+      return res.json({ ok: true, id });
+    }
+
+    const existing = await client.query(
+      `
+        SELECT id
+        FROM supplier_hotelware_ose
+        WHERE LOWER(supplier_name)=LOWER($1)
+          AND LOWER(COALESCE(main_category,'')) = LOWER($2)
+          AND LOWER(COALESCE(typical_products,'')) = LOWER($3)
+        LIMIT 1
+      `,
+      [supplierName, mainCategory || "", typicalProducts || ""]
+    );
+
+    if (existing.rows.length) {
+      const existingId = existing.rows[0].id;
+      await client.query(
+        `
+          UPDATE supplier_hotelware_ose
+          SET supplier_name=$1, main_category=$2, typical_products=$3, notes=$4, updated_at=NOW()
+          WHERE id=$5
+        `,
+        [supplierName, mainCategory || null, typicalProducts || null, notes || null, existingId]
+      );
+      return res.json({ ok: true, id: existingId });
+    }
+
+    const { rows } = await client.query(
+      `
+        INSERT INTO supplier_hotelware_ose (supplier_name, main_category, typical_products, notes)
+        VALUES ($1,$2,$3,$4)
+        RETURNING id
+      `,
+      [supplierName, mainCategory || null, typicalProducts || null, notes || null]
+    );
+    res.json({ ok: true, id: rows[0]?.id });
+  } catch (err) {
+    console.error("Upsert supplier_hotelware_ose error:", err);
+    res.status(500).json({ error: "UPSERT_FAILED", message: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Lightweight service to expose chosen supplier & cost for recipes/KPIs
+app.get("/api/suppliers/cost", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { category, brand, item } = req.query || {};
+  if (!category || !item) {
+    return res.status(400).json({ error: "MISSING_FIELDS", message: "Category and item are required." });
+  }
+
+  const filters = [`LOWER(COALESCE(category,'')) = LOWER($1)`, `LOWER(item) = LOWER($2)`];
+  const params = [category, item];
+  let idx = 3;
+  if (brand) {
+    filters.push(`LOWER(COALESCE(brand,'')) = LOWER($${idx++})`);
+    params.push(brand);
+  }
+
+  const where = `WHERE ${filters.join(" AND ")}`;
+
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          id,
+          category,
+          brand,
+          menu_section AS "menuSection",
+          item,
+          recommended_supplier AS "recommendedSupplier",
+          chosen_supplier AS "chosenSupplier",
+          price_supplier1 AS "priceSupplier1",
+          price_supplier2 AS "priceSupplier2",
+          price_supplier3 AS "priceSupplier3",
+          lowest_price AS "lowestPrice"
+        FROM supplier_comparison
+        ${where}
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        LIMIT 1
+      `,
+      params
+    );
+
+    if (!rows.length) {
+      return res.json({ ok: true, record: null });
+    }
+
+    const row = rows[0];
+    const lowest = computeLowestPrice({
+      price1: row.priceSupplier1,
+      price2: row.priceSupplier2,
+      price3: row.priceSupplier3,
+      fallback: row.lowestPrice,
+    });
+
+    res.json({
+      ok: true,
+      record: {
+        ...row,
+        lowestPrice: lowest,
+        costPerUnit: lowest,
+        supplier: row.chosenSupplier || row.recommendedSupplier || null,
+      },
+    });
+  } catch (err) {
+    console.error("Fetch supplier cost error:", err);
+    res.status(500).json({ error: "FETCH_FAILED", message: err.message });
+  }
+});
+
+// Workbook import (supports dry-run preview)
+app.post("/api/suppliers/comparison/import", async (req, res) => {
+  if (!pool) {
+    return res
+      .status(503)
+      .json({ error: "DB_NOT_CONFIGURED", message: "DATABASE_URL missing" });
+  }
+
+  const { fileBase64, fileName, dryRun = true } = req.body || {};
+  if (!fileBase64) {
+    return res.status(400).json({ error: "MISSING_FILE", message: "fileBase64 is required." });
+  }
+
+  try {
+    const buffer = Buffer.from(fileBase64, "base64");
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+
+    const errors = [];
+    const summary = {};
+
+    const parseSheet = (sheetName, requiredHeaders, mapper) => {
+      const sheet = wb.getWorksheet(sheetName);
+      if (!sheet) {
+        summary[sheetName] = { found: false, rows: 0, inserts: 0, updates: 0 };
+        return [];
+      }
+
+      const headerMap = {};
+      sheet.getRow(1).eachCell((cell, colNumber) => {
+        const key = normalizeText(cell.value);
+        if (key) headerMap[key] = colNumber;
+      });
+
+      const missing = requiredHeaders.filter((h) => !headerMap[h]);
+      if (missing.length) {
+        errors.push(`Sheet "${sheetName}" is missing columns: ${missing.join(", ")}`);
+        summary[sheetName] = { found: true, rows: 0, inserts: 0, updates: 0, missing };
+        return [];
+      }
+
+      const rows = [];
+      sheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const getCell = (header) => {
+          const col = headerMap[header];
+          if (!col) return "";
+          const val = row.getCell(col).value;
+          if (val && typeof val === "object" && val.text) return val.text;
+          if (val && typeof val === "object" && val.result !== undefined) return val.result;
+          return val ?? "";
+        };
+        const mapped = mapper(getCell);
+        const hasData = Object.values(mapped).some((v) => normalizeText(v) !== "" || typeof v === "number");
+        if (hasData) rows.push(mapped);
+      });
+
+      summary[sheetName] = { found: true, rows: rows.length, inserts: 0, updates: 0 };
+      return rows;
+    };
+
+    const comparisonRows = parseSheet(
+      "Supplier_Comparison",
+      [
+        "Category",
+        "Brand",
+        "Menu Section",
+        "Item",
+        "Spec / Notes",
+        "Recommended Supplier (Cost-efficient)",
+        "Alternative Supplier 1",
+        "Alternative Supplier 2",
+        "Pack Size",
+        "UOM",
+        "Price - Supplier 1 (JOD)",
+        "Price - Supplier 2 (JOD)",
+        "Price - Supplier 3 (JOD)",
+        "Lowest Price (JOD)",
+        "Chosen Supplier",
+        "Notes",
+      ],
+      (get) => ({
+        category: normalizeText(get("Category")),
+        brand: normalizeText(get("Brand")),
+        menuSection: normalizeText(get("Menu Section")),
+        item: normalizeText(get("Item")),
+        specNotes: normalizeText(get("Spec / Notes")),
+        recommendedSupplier: normalizeText(get("Recommended Supplier (Cost-efficient)")),
+        alternativeSupplier1: normalizeText(get("Alternative Supplier 1")),
+        alternativeSupplier2: normalizeText(get("Alternative Supplier 2")),
+        packSize: normalizeText(get("Pack Size")),
+        uom: normalizeText(get("UOM")),
+        priceSupplier1: numberOrNull(get("Price - Supplier 1 (JOD)")),
+        priceSupplier2: numberOrNull(get("Price - Supplier 2 (JOD)")),
+        priceSupplier3: numberOrNull(get("Price - Supplier 3 (JOD)")),
+        lowestPrice: numberOrNull(get("Lowest Price (JOD)")),
+        chosenSupplier: normalizeText(get("Chosen Supplier")),
+        notes: normalizeText(get("Notes")),
+      })
+    );
+
+    const directoryRows = parseSheet(
+      "Supplier_Directory",
+      ["Supplier Name", "Main Categories", "Type", "Notes / Strategy", "Website"],
+      (get) => ({
+        supplierName: normalizeText(get("Supplier Name")),
+        mainCategories: normalizeText(get("Main Categories")),
+        type: normalizeText(get("Type")),
+        notesStrategy: normalizeText(get("Notes / Strategy")),
+        website: normalizeText(get("Website")),
+      })
+    );
+
+    const contactRows = parseSheet(
+      "Supplier_Contacts",
+      ["Supplier Name", "Address", "Phone", "Fax", "Email", "Website", "Notes"],
+      (get) => ({
+        supplierName: normalizeText(get("Supplier Name")),
+        address: normalizeText(get("Address")),
+        phone: normalizeText(get("Phone")),
+        fax: normalizeText(get("Fax")),
+        email: normalizeText(get("Email")),
+        website: normalizeText(get("Website")),
+        notes: normalizeText(get("Notes")),
+      })
+    );
+
+    const kitchenRows = parseSheet(
+      "Kitchen_Equipment",
+      ["Supplier Name", "Main Category", "Typical Products / Focus", "Notes"],
+      (get) => ({
+        supplierName: normalizeText(get("Supplier Name")),
+        mainCategory: normalizeText(get("Main Category")),
+        typicalProducts: normalizeText(get("Typical Products / Focus")),
+        notes: normalizeText(get("Notes")),
+      })
+    );
+
+    const packagingRows = parseSheet(
+      "Packaging_Disposables",
+      ["Supplier Name", "Main Category", "Typical Products / Focus", "Notes"],
+      (get) => ({
+        supplierName: normalizeText(get("Supplier Name")),
+        mainCategory: normalizeText(get("Main Category")),
+        typicalProducts: normalizeText(get("Typical Products / Focus")),
+        notes: normalizeText(get("Notes")),
+      })
+    );
+
+    const hotelwareRows = parseSheet(
+      "Hotelware_OSE",
+      ["Supplier Name", "Main Category", "Typical Products / Focus", "Notes"],
+      (get) => ({
+        supplierName: normalizeText(get("Supplier Name")),
+        mainCategory: normalizeText(get("Main Category")),
+        typicalProducts: normalizeText(get("Typical Products / Focus")),
+        notes: normalizeText(get("Notes")),
+      })
+    );
+
+    if (errors.length) {
+      return res.status(400).json({ error: "INVALID_WORKBOOK", errors, summary });
+    }
+
+    const client = await pool.connect();
+    try {
+      if (!dryRun) {
+        await client.query("BEGIN");
+      }
+
+      const comparisonExisting = await client.query(
+        `SELECT id, category, brand, menu_section, item FROM supplier_comparison`
+      );
+      const comparisonMap = new Map();
+      comparisonExisting.rows.forEach((r) => {
+        comparisonMap.set(
+          makeComparisonKey({
+            category: r.category,
+            brand: r.brand,
+            menuSection: r.menu_section,
+            item: r.item,
+          }),
+          r
+        );
+      });
+
+      const directoryExisting = await client.query(`SELECT id, supplier_name FROM supplier_directory`);
+      const directoryMap = new Map();
+      directoryExisting.rows.forEach((r) => directoryMap.set(makeDirectoryKey(r.supplier_name), r.id));
+
+      const contactExisting = await client.query(
+        `SELECT id, supplier_name, phone, email FROM supplier_contacts`
+      );
+      const contactMap = new Map();
+      contactExisting.rows.forEach((r) =>
+        contactMap.set(
+          makeContactKey({ supplierName: r.supplier_name, phone: r.phone, email: r.email }),
+          r.id
+        )
+      );
+
+      const kitchenExisting = await client.query(
+        `SELECT id, supplier_name, main_category, typical_products FROM supplier_kitchen_equipment`
+      );
+      const kitchenMap = new Map();
+      kitchenExisting.rows.forEach((r) =>
+        kitchenMap.set(
+          makeProductKey({
+            supplierName: r.supplier_name,
+            mainCategory: r.main_category,
+            typicalProducts: r.typical_products,
+          }),
+          r.id
+        )
+      );
+
+      const packagingExisting = await client.query(
+        `SELECT id, supplier_name, main_category, typical_products FROM supplier_packaging_disposables`
+      );
+      const packagingMap = new Map();
+      packagingExisting.rows.forEach((r) =>
+        packagingMap.set(
+          makeProductKey({
+            supplierName: r.supplier_name,
+            mainCategory: r.main_category,
+            typicalProducts: r.typical_products,
+          }),
+          r.id
+        )
+      );
+
+      const hotelExisting = await client.query(
+        `SELECT id, supplier_name, main_category, typical_products FROM supplier_hotelware_ose`
+      );
+      const hotelMap = new Map();
+      hotelExisting.rows.forEach((r) =>
+        hotelMap.set(
+          makeProductKey({
+            supplierName: r.supplier_name,
+            mainCategory: r.main_category,
+            typicalProducts: r.typical_products,
+          }),
+          r.id
+        )
+      );
+
+      // Upsert Supplier Directory first (needed for foreign keys)
+      for (const row of directoryRows) {
+        if (!row.supplierName) continue;
+        const key = makeDirectoryKey(row.supplierName);
+        const existingId = directoryMap.get(key);
+        if (existingId) {
+          summary["Supplier_Directory"].updates += 1;
+          if (!dryRun) {
+            await client.query(
+              `
+                UPDATE supplier_directory
+                SET supplier_name=$1, main_categories=$2, type=$3, notes_strategy=$4, website=$5, updated_at=NOW()
+                WHERE id=$6
+              `,
+              [row.supplierName, row.mainCategories || null, row.type || null, row.notesStrategy || null, row.website || null, existingId]
+            );
+          }
+        } else {
+          summary["Supplier_Directory"].inserts += 1;
+          if (!dryRun) {
+            const { rows } = await client.query(
+              `
+                INSERT INTO supplier_directory (supplier_name, main_categories, type, notes_strategy, website)
+                VALUES ($1,$2,$3,$4,$5)
+                RETURNING id
+              `,
+              [row.supplierName, row.mainCategories || null, row.type || null, row.notesStrategy || null, row.website || null]
+            );
+            directoryMap.set(key, rows[0]?.id);
+          }
+        }
+      }
+
+      for (const row of comparisonRows) {
+        if (!row.item) continue;
+        const key = makeComparisonKey(row);
+        const lowest = computeLowestPrice({
+          price1: row.priceSupplier1,
+          price2: row.priceSupplier2,
+          price3: row.priceSupplier3,
+          fallback: row.lowestPrice,
+        });
+        const payload = [
+          row.category || "",
+          row.brand || "",
+          row.menuSection || "",
+          row.item,
+          row.specNotes || null,
+          row.recommendedSupplier || null,
+          row.alternativeSupplier1 || null,
+          row.alternativeSupplier2 || null,
+          row.packSize || null,
+          row.uom || null,
+          numberOrNull(row.priceSupplier1),
+          numberOrNull(row.priceSupplier2),
+          numberOrNull(row.priceSupplier3),
+          lowest,
+          row.chosenSupplier || null,
+          row.notes || null,
+        ];
+
+        const existing = comparisonMap.get(key);
+        if (existing) {
+          summary["Supplier_Comparison"].updates += 1;
+          if (!dryRun) {
+            await client.query(
+              `
+                UPDATE supplier_comparison
+                SET category=$1, brand=$2, menu_section=$3, item=$4,
+                    spec_notes=$5, recommended_supplier=$6, alternative_supplier1=$7, alternative_supplier2=$8,
+                    pack_size=$9, uom=$10, price_supplier1=$11, price_supplier2=$12, price_supplier3=$13,
+                    lowest_price=$14, chosen_supplier=$15, notes=$16, updated_at=NOW()
+                WHERE id=$17
+              `,
+              [...payload, existing.id]
+            );
+          }
+        } else {
+          summary["Supplier_Comparison"].inserts += 1;
+          if (!dryRun) {
+            const { rows } = await client.query(
+              `
+                INSERT INTO supplier_comparison (
+                  category, brand, menu_section, item, spec_notes,
+                  recommended_supplier, alternative_supplier1, alternative_supplier2,
+                  pack_size, uom, price_supplier1, price_supplier2, price_supplier3,
+                  lowest_price, chosen_supplier, notes
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+                RETURNING id
+              `,
+              payload
+            );
+            comparisonMap.set(key, { id: rows[0]?.id });
+          }
+        }
+      }
+
+      for (const row of contactRows) {
+        if (!row.supplierName) continue;
+        const key = makeContactKey(row);
+        const supplierId = directoryMap.get(makeDirectoryKey(row.supplierName)) || null;
+        const existingId = contactMap.get(key);
+        if (existingId) {
+          summary["Supplier_Contacts"].updates += 1;
+          if (!dryRun) {
+            await client.query(
+              `
+                UPDATE supplier_contacts
+                SET supplier_id=$1, supplier_name=$2, address=$3, phone=$4, fax=$5, email=$6, website=$7, notes=$8, updated_at=NOW()
+                WHERE id=$9
+              `,
+              [
+                supplierId,
+                row.supplierName,
+                row.address || null,
+                row.phone || null,
+                row.fax || null,
+                row.email || null,
+                row.website || null,
+                row.notes || null,
+                existingId,
+              ]
+            );
+          }
+        } else {
+          summary["Supplier_Contacts"].inserts += 1;
+          if (!dryRun) {
+            const { rows } = await client.query(
+              `
+                INSERT INTO supplier_contacts (supplier_id, supplier_name, address, phone, fax, email, website, notes)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                RETURNING id
+              `,
+              [
+                supplierId,
+                row.supplierName,
+                row.address || null,
+                row.phone || null,
+                row.fax || null,
+                row.email || null,
+                row.website || null,
+                row.notes || null,
+              ]
+            );
+            contactMap.set(key, rows[0]?.id);
+          }
+        }
+      }
+
+      const upsertGeneric = async (rowsArr, map, summaryKey, tableName) => {
+        for (const row of rowsArr) {
+          if (!row.supplierName) continue;
+          const key = makeProductKey(row);
+          const existingId = map.get(key);
+          if (existingId) {
+            summary[summaryKey].updates += 1;
+            if (!dryRun) {
+              await client.query(
+                `
+                  UPDATE ${tableName}
+                  SET supplier_name=$1, main_category=$2, typical_products=$3, notes=$4, updated_at=NOW()
+                  WHERE id=$5
+                `,
+                [row.supplierName, row.mainCategory || null, row.typicalProducts || null, row.notes || null, existingId]
+              );
+            }
+          } else {
+            summary[summaryKey].inserts += 1;
+            if (!dryRun) {
+              const { rows } = await client.query(
+                `
+                  INSERT INTO ${tableName} (supplier_name, main_category, typical_products, notes)
+                  VALUES ($1,$2,$3,$4)
+                  RETURNING id
+                `,
+                [row.supplierName, row.mainCategory || null, row.typicalProducts || null, row.notes || null]
+              );
+              map.set(key, rows[0]?.id);
+            }
+          }
+        }
+      };
+
+      await upsertGeneric(kitchenRows, kitchenMap, "Kitchen_Equipment", "supplier_kitchen_equipment");
+      await upsertGeneric(packagingRows, packagingMap, "Packaging_Disposables", "supplier_packaging_disposables");
+      await upsertGeneric(hotelwareRows, hotelMap, "Hotelware_OSE", "supplier_hotelware_ose");
+
+      if (!dryRun) {
+        await client.query("COMMIT");
+      }
+
+      res.json({
+        ok: true,
+        dryRun: !!dryRun,
+        summary,
+        fileName: fileName || null,
+      });
+    } catch (err) {
+      if (!dryRun) {
+        await client.query("ROLLBACK");
+      }
+      console.error("Supplier workbook import failed:", err);
+      res.status(500).json({ error: "IMPORT_FAILED", message: err.message });
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("Import parsing error:", err);
+    res.status(500).json({ error: "IMPORT_PARSE_FAILED", message: err.message });
   }
 });
 
