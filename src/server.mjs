@@ -3721,8 +3721,29 @@ app.post("/api/action-plan/import-excel", async (req, res) => {
       "Comments",
     ];
 
+    const normalizeHeaderKey = (val) =>
+      normalizeText(val)
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+
+    // Detect header row (row 2 expected, else first row with >=5 cells)
+    let headerRow = sheet.getRow(2);
+    if (!headerRow || headerRow.cellCount < 5) {
+      sheet.eachRow((row) => {
+        let nonEmpty = 0;
+        row.eachCell((cell) => {
+          if (normalizeText(cell.value)) nonEmpty += 1;
+        });
+        if (nonEmpty >= 5 && !headerRow) {
+          headerRow = row;
+        }
+      });
+    }
+
     const headerMap = {};
-    sheet.getRow(2).eachCell((cell, col) => {
+    headerRow.eachCell((cell, col) => {
       const raw = cell?.value;
       let key = "";
       if (raw && typeof raw === "object") {
@@ -3732,11 +3753,12 @@ app.post("/api/action-plan/import-excel", async (req, res) => {
       } else {
         key = raw;
       }
-      key = normalizeText(key);
+      key = normalizeHeaderKey(key);
       if (key) headerMap[key] = col;
     });
 
-    const missing = headers.filter((h) => !headerMap[h]);
+    const headerSet = new Set(Object.keys(headerMap));
+    const missing = headers.filter((h) => !headerSet.has(normalizeHeaderKey(h)));
     if (missing.length) {
       return res
         .status(400)
@@ -3747,11 +3769,14 @@ app.post("/api/action-plan/import-excel", async (req, res) => {
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber <= 2) return; // skip desc + headers
       const get = (header) => {
-        const col = headerMap[header];
+        const col = headerMap[normalizeHeaderKey(header)];
         if (!col) return "";
         const val = row.getCell(col).value;
         if (val && typeof val === "object" && val.text) return val.text;
         if (val && typeof val === "object" && val.result !== undefined) return val.result;
+        if (val && typeof val === "object" && Array.isArray(val.richText)) {
+          return val.richText.map((t) => t.text || "").join("");
+        }
         return val ?? "";
       };
 
