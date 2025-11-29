@@ -482,6 +482,7 @@ function ImportPanel({ onImported }) {
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -497,14 +498,15 @@ function ImportPanel({ onImported }) {
     }
   };
 
-  const upload = async () => {
+  const upload = async (previewOnly = false) => {
     const fileInput = document.getElementById("action-plan-file");
     const file = fileInput?.files?.[0];
     if (!file) {
       setError("Choose an .xlsx file first.");
       return;
     }
-    setLoading(true);
+    if (previewOnly) setPreviewLoading(true);
+    else setLoading(true);
     setError("");
     try {
       const buf = await file.arrayBuffer();
@@ -512,18 +514,21 @@ function ImportPanel({ onImported }) {
       const resp = await fetch(apiUrl("/api/action-plan/import-excel"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileBase64: base64, fileName }),
+        body: JSON.stringify({ fileBase64: base64, fileName, previewOnly }),
       });
       const data = await resp.json();
       if (!resp.ok) {
         throw new Error(data?.message || "Import failed");
       }
       setSummary(data);
-      onImported?.();
+      if (!previewOnly) {
+        onImported?.();
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+      setPreviewLoading(false);
     }
   };
 
@@ -534,9 +539,14 @@ function ImportPanel({ onImported }) {
           <div className="card-title">Import 3M Plan</div>
           <div className="hint-text">Select the Excel file and preview before saving.</div>
         </div>
-        <button type="button" className="primary-btn" onClick={upload} disabled={loading}>
-          {loading ? "Importing..." : "Import Excel"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="secondary-btn" onClick={() => upload(true)} disabled={previewLoading || loading}>
+            {previewLoading ? "Previewing..." : "Preview"}
+          </button>
+          <button type="button" className="primary-btn" onClick={() => upload(false)} disabled={loading}>
+            {loading ? "Importing..." : "Import Excel"}
+          </button>
+        </div>
       </div>
       <input id="action-plan-file" type="file" accept=".xlsx" onChange={handleFile} />
       {error && <div className="error-text" style={{ marginTop: 8 }}>{error}</div>}
