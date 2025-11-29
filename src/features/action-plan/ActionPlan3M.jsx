@@ -483,6 +483,7 @@ function ImportPanel({ onImported }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const PREVIEW_LIMIT = 200;
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -491,7 +492,7 @@ function ImportPanel({ onImported }) {
     setError("");
     try {
       const rows = await parseExcelFile(file);
-      setPreviewRows(rows.slice(0, 15));
+      setPreviewRows(rows.slice(0, PREVIEW_LIMIT));
     } catch (err) {
       setError(err.message);
       setPreviewRows([]);
@@ -580,6 +581,9 @@ function ImportPanel({ onImported }) {
       )}
       {previewRows.length > 0 && (
         <div className="table-wrapper" style={{ marginTop: 8, maxHeight: 240, overflow: "auto" }}>
+          <div className="hint-text" style={{ marginBottom: 4 }}>
+            Showing first {previewRows.length} rows (limit {PREVIEW_LIMIT}). All columns are visible below.
+          </div>
           <table className="data-table">
             <thead>
               <tr>
@@ -596,16 +600,16 @@ function ImportPanel({ onImported }) {
             <tbody>
               {previewRows.map((r) => (
                 <tr key={makeKey(r)}>
-                  <td>{r.phase}</td>
-                  <td>{r.area}</td>
-                  <td>{r.action}</td>
-                  <td>{r.owner}</td>
-                  <td>{r.status}</td>
-                  <td>{r.priority}</td>
-                  <td>
+                  <td style={{ whiteSpace: "normal" }}>{r.phase}</td>
+                  <td style={{ whiteSpace: "normal" }}>{r.area}</td>
+                  <td style={{ whiteSpace: "normal" }}>{r.action}</td>
+                  <td style={{ whiteSpace: "normal" }}>{r.owner}</td>
+                  <td style={{ whiteSpace: "normal" }}>{r.status}</td>
+                  <td style={{ whiteSpace: "normal" }}>{r.priority}</td>
+                  <td style={{ whiteSpace: "normal" }}>
                     {r.startMonth}/{r.startWeek}
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: "normal" }}>
                     {r.endMonth}/{r.endWeek}
                   </td>
                 </tr>
