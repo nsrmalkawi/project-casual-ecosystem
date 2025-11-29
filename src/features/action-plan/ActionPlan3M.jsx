@@ -335,11 +335,11 @@ function ActionTable({ rows, onInlineUpdate }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id || makeKey(r)}>
-                <td>{r.phase}</td>
-                <td>{r.area}</td>
-                <td>
+                <td style={{ whiteSpace: "normal" }}>{r.phase}</td>
+                <td style={{ whiteSpace: "normal" }}>{r.area}</td>
+                <td style={{ whiteSpace: "normal" }}>
                   <div style={{ fontWeight: 600 }}>{r.action}</div>
-                  <div className="hint-text">{r.description}</div>
+                  {r.description && <div className="hint-text">Desc: {r.description}</div>}
                   {r.dependencies && <div className="hint-text">Deps: {r.dependencies}</div>}
                   {r.riskBlockers && <div className="hint-text">Risk: {r.riskBlockers}</div>}
                 </td>
@@ -347,12 +347,14 @@ function ActionTable({ rows, onInlineUpdate }) {
                   <input
                     type="text"
                     value={r.owner || ""}
+                    title={r.owner || ""}
                     onChange={(e) => onInlineUpdate(r, { owner: e.target.value })}
                   />
                 </td>
                 <td>
                   <select
                     value={r.status || ""}
+                    title={r.status || ""}
                     onChange={(e) => onInlineUpdate(r, { status: e.target.value })}
                   >
                     <option value="">Select</option>
@@ -366,6 +368,7 @@ function ActionTable({ rows, onInlineUpdate }) {
                 <td>
                   <select
                     value={r.priority || ""}
+                    title={r.priority || ""}
                     onChange={(e) => onInlineUpdate(r, { priority: e.target.value })}
                   >
                     <option value="">Select</option>
@@ -376,16 +379,17 @@ function ActionTable({ rows, onInlineUpdate }) {
                     ))}
                   </select>
                 </td>
-                <td>{`${r.startMonth || ""} / ${r.startWeek || ""}`}</td>
-                <td>{`${r.endMonth || ""} / ${r.endWeek || ""}`}</td>
-                <td>{r.impact}</td>
-                <td>{r.effort}</td>
-                <td>{r.kpiMetric}</td>
-                <td>{r.kpiTargetM3}</td>
+                <td style={{ whiteSpace: "normal" }}>{`${r.startMonth || ""} / ${r.startWeek || ""}`}</td>
+                <td style={{ whiteSpace: "normal" }}>{`${r.endMonth || ""} / ${r.endWeek || ""}`}</td>
+                <td style={{ whiteSpace: "normal" }}>{r.impact}</td>
+                <td style={{ whiteSpace: "normal" }}>{r.effort}</td>
+                <td style={{ whiteSpace: "normal" }}>{r.kpiMetric}</td>
+                <td style={{ whiteSpace: "normal" }}>{r.kpiTargetM3}</td>
                 <td>
                   <input
                     type="text"
                     value={r.comments || ""}
+                    title={r.comments || ""}
                     onChange={(e) => onInlineUpdate(r, { comments: e.target.value })}
                   />
                 </td>
