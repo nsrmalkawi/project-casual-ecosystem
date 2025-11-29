@@ -3784,41 +3784,35 @@ app.post("/api/action-plan/import-excel", async (req, res) => {
         return val ?? "";
       };
 
+      const startMonthVal = normalizeText(get("Start Month")) || normalizeText(get("End Month")) || "1";
+      const startWeekVal = normalizeText(get("Start Week")) || "1";
       const mapped = {
-        phase: get("Phase"),
-        area: get("Area"),
-        action: get("Action"),
-        description: get("Description"),
-        kpiMetric: get("KPI Metric"),
-        kpiTargetM3: get("KPI Target by Month 3"),
-        startMonth: get("Start Month"),
-        startWeek: get("Start Week"),
-        endMonth: get("End Month"),
-        endWeek: get("End Week"),
-        impact: get("Impact (H/M/L)"),
-        effort: get("Effort / Complexity (H/M/L)"),
-        dependencies: get("Dependencies"),
-        budgetEstimate: get("Budget / Cost Estimate"),
-        riskBlockers: get("Risk / Blockers"),
-        validationMethod: get("Validation Method"),
-        owner: get("Owner"),
-        priority: get("Priority"),
-        status: get("Status"),
-        comments: get("Comments"),
+        phase: normalizeText(get("Phase")),
+        area: normalizeText(get("Area")),
+        action: normalizeText(get("Action")),
+        description: normalizeText(get("Description")),
+        kpiMetric: normalizeText(get("KPI Metric")),
+        kpiTargetM3: normalizeText(get("KPI Target by Month 3")),
+        startMonth: startMonthVal,
+        startWeek: startWeekVal,
+        endMonth: normalizeText(get("End Month")),
+        endWeek: normalizeText(get("End Week")),
+        impact: normalizeText(get("Impact (H/M/L)")),
+        effort: normalizeText(get("Effort / Complexity (H/M/L)")),
+        dependencies: normalizeText(get("Dependencies")),
+        budgetEstimate: normalizeText(get("Budget / Cost Estimate")),
+        riskBlockers: normalizeText(get("Risk / Blockers")),
+        validationMethod: normalizeText(get("Validation Method")),
+        owner: normalizeText(get("Owner")),
+        priority: normalizeText(get("Priority")),
+        status: normalizeText(get("Status")),
+        comments: normalizeText(get("Comments")),
         _rowNumber: rowNumber,
       };
 
-      const requiredFields = [
-        mapped.phase,
-        mapped.area,
-        mapped.action,
-        mapped.owner,
-        mapped.startMonth,
-        mapped.startWeek,
-        mapped.status,
-      ];
+      const requiredFields = [mapped.phase, mapped.area, mapped.action, mapped.owner, mapped.status];
       if (requiredFields.some((v) => !normalizeText(v))) {
-        rows.push({ ...mapped, _skip: true, _reason: "Missing required fields" });
+        rows.push({ ...mapped, _skip: true, _reason: "Missing required fields (Phase, Area, Action, Owner, Status)" });
       } else {
         rows.push(mapped);
       }

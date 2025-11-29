@@ -555,6 +555,29 @@ function ImportPanel({ onImported }) {
           Inserted {summary.insertedCount} | Updated {summary.updatedCount} | Skipped {summary.skippedCount}
         </div>
       )}
+      {summary?.errors?.length > 0 && (
+        <div className="card" style={{ marginTop: 8, background: "#fff7ed" }}>
+          <div className="card-title">Import issues</div>
+          <div className="table-wrapper" style={{ maxHeight: 180, overflow: "auto" }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Row</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.errors.map((e, idx) => (
+                  <tr key={`${e.row}-${idx}`}>
+                    <td>{e.row}</td>
+                    <td>{e.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {previewRows.length > 0 && (
         <div className="table-wrapper" style={{ marginTop: 8, maxHeight: 240, overflow: "auto" }}>
           <table className="data-table">
