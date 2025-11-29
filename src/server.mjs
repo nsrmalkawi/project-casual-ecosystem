@@ -144,6 +144,13 @@ function deriveHourlyRate({ hourlyRate, monthlySalary }) {
 
 function normalizeText(value) {
   if (value === null || value === undefined) return "";
+  if (typeof value === "object" && value !== null) {
+    if (value.text) return String(value.text).trim();
+    if (value.result !== undefined) return String(value.result).trim();
+    if (Array.isArray(value.richText)) {
+      return value.richText.map((t) => t.text || "").join("").trim();
+    }
+  }
   return String(value).trim();
 }
 
@@ -3716,7 +3723,16 @@ app.post("/api/action-plan/import-excel", async (req, res) => {
 
     const headerMap = {};
     sheet.getRow(2).eachCell((cell, col) => {
-      const key = normalizeText(cell.value);
+      const raw = cell?.value;
+      let key = "";
+      if (raw && typeof raw === "object") {
+        if (raw.text) key = raw.text;
+        else if (raw.result !== undefined) key = raw.result;
+        else if (Array.isArray(raw.richText)) key = raw.richText.map((t) => t.text || "").join("");
+      } else {
+        key = raw;
+      }
+      key = normalizeText(key);
       if (key) headerMap[key] = col;
     });
 
