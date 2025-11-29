@@ -3728,33 +3728,37 @@ app.post("/api/action-plan/import-excel", async (req, res) => {
         .trim()
         .toLowerCase();
 
-    // Detect header row (row 2 expected, else first row with >=5 cells)
-    let headerRow = sheet.getRow(2);
-    if (!headerRow || headerRow.cellCount < 5) {
-      sheet.eachRow((row) => {
-        let nonEmpty = 0;
-        row.eachCell((cell) => {
-          if (normalizeText(cell.value)) nonEmpty += 1;
-        });
-        if (nonEmpty >= 5 && !headerRow) {
-          headerRow = row;
+    // Find best header row by matching expected headers
+    let headerRowIdx = 0;
+    let bestMatch = -1;
+    let headerMap = {};
+
+    sheet.eachRow((row) => {
+      const mapCandidate = {};
+      let matches = 0;
+      row.eachCell((cell, col) => {
+        const raw = cell?.value;
+        let key = "";
+        if (raw && typeof raw === "object") {
+          if (raw.text) key = raw.text;
+          else if (raw.result !== undefined) key = raw.result;
+          else if (Array.isArray(raw.richText)) key = raw.richText.map((t) => t.text || "").join("");
+        } else {
+          key = raw;
+        }
+        key = normalizeHeaderKey(key);
+        if (key) {
+          mapCandidate[key] = col;
+          if (headers.some((h) => normalizeHeaderKey(h) === key)) {
+            matches += 1;
+          }
         }
       });
-    }
-
-    const headerMap = {};
-    headerRow.eachCell((cell, col) => {
-      const raw = cell?.value;
-      let key = "";
-      if (raw && typeof raw === "object") {
-        if (raw.text) key = raw.text;
-        else if (raw.result !== undefined) key = raw.result;
-        else if (Array.isArray(raw.richText)) key = raw.richText.map((t) => t.text || "").join("");
-      } else {
-        key = raw;
+      if (matches > bestMatch) {
+        bestMatch = matches;
+        headerRowIdx = row.number;
+        headerMap = mapCandidate;
       }
-      key = normalizeHeaderKey(key);
-      if (key) headerMap[key] = col;
     });
 
     const headerSet = new Set(Object.keys(headerMap));
@@ -3767,7 +3771,7 @@ app.post("/api/action-plan/import-excel", async (req, res) => {
 
     const rows = [];
     sheet.eachRow((row, rowNumber) => {
-      if (rowNumber <= 2) return; // skip desc + headers
+      if (rowNumber <= headerRowIdx) return; // skip description/header rows
       const get = (header) => {
         const col = headerMap[normalizeHeaderKey(header)];
         if (!col) return "";
