@@ -1045,13 +1045,34 @@ function DataEntryHub() {
   const renderActiveSection = () => {
     switch (activeSection) {
       case "sales":
-        return <SalesSection />;
+        return (
+          <SalesSection
+            brandOptions={brandOptions}
+            outletOptions={outletOptions}
+          />
+        );
       case "purchases":
-        return <PurchasesEntry />;
+        return (
+          <PurchasesEntry
+            brandOptions={brandOptions}
+            outletOptions={outletOptions}
+          />
+        );
       case "waste":
-        return <WasteEntry />;
+        return (
+          <WasteEntry
+            brandOptions={brandOptions}
+            outletOptions={outletOptions}
+            wasteReasonOptions={wasteReasonOptions}
+          />
+        );
       case "inventory":
-        return <InventoryEntry />;
+        return (
+          <InventoryEntry
+            brandOptions={brandOptions}
+            outletOptions={outletOptions}
+          />
+        );
       case "rent-opex":
         return (
           <RentOpexEntry
@@ -1060,7 +1081,13 @@ function DataEntryHub() {
           />
         );
       case "hr-labor":
-        return <HREntry />;
+        return (
+          <HREntry
+            brandOptions={brandOptions}
+            outletOptions={outletOptions}
+            roleOptions={hrRoleOptions}
+          />
+        );
       case "petty-cash":
         return renderPettyCashSection();
       default:

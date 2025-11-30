@@ -5,7 +5,11 @@ import { BRANDS, OUTLETS } from "../../config/lookups";
 
 const STORAGE_KEY = "pc_waste";
 
-function WasteEntry() {
+function WasteEntry({
+  brandOptions = BRANDS,
+  outletOptions = OUTLETS,
+  wasteReasonOptions = [],
+} = {}) {
   const [form, setForm] = useState({
     date: "",
     brand: "",
@@ -140,7 +144,7 @@ function WasteEntry() {
         <label>Brand</label>
         <select name="brand" value={form.brand} onChange={handleChange}>
           <option value="">Select brand</option>
-          {BRANDS.map((b) => (
+          {brandOptions.map((b) => (
             <option key={b} value={b}>
               {b}
             </option>
@@ -152,7 +156,7 @@ function WasteEntry() {
         <label>Outlet</label>
         <select name="outlet" value={form.outlet} onChange={handleChange}>
           <option value="">Select outlet</option>
-          {OUTLETS.map((o) => (
+          {outletOptions.map((o) => (
             <option key={o} value={o}>
               {o}
             </option>
@@ -220,16 +224,22 @@ function WasteEntry() {
           />
         </div>
 
-        <div className="form-field">
-          <label>Reason</label>
-          <input
-            type="text"
-            name="reason"
-            placeholder="Overproduction, expiry..."
-            value={form.reason}
-            onChange={handleChange}
-          />
-        </div>
+      <div className="form-field">
+        <label>Reason</label>
+        <input
+          type="text"
+          name="reason"
+          list="waste-reasons"
+          placeholder="Overproduction, expiry..."
+          value={form.reason}
+          onChange={handleChange}
+        />
+        <datalist id="waste-reasons">
+          {wasteReasonOptions.map((r) => (
+            <option key={r} value={r} />
+          ))}
+        </datalist>
+      </div>
 
         <div className="form-field" style={{ gridColumn: "1 / -1" }}>
           <label>Notes</label>

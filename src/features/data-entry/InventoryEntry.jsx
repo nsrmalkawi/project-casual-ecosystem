@@ -16,7 +16,10 @@ function normalizeRow(raw) {
   return raw;
 }
 
-export default function InventoryEntry() {
+export default function InventoryEntry({
+  brandOptions = BRANDS,
+  outletOptions = OUTLETS,
+} = {}) {
   const [rows, setRows] = useState(() => {
     const stored = loadData("pc_inventory", []) || [];
     const normalized = stored.map(normalizeRow).filter((r) => r !== null);
@@ -333,13 +336,19 @@ export default function InventoryEntry() {
                     </div>
                   </td>
                   <td>
-                    <input
-                      type="text"
+                    <select
                       value={row.brand || ""}
                       onChange={(e) =>
                         updateRowField(row.id, "brand", e.target.value)
                       }
-                    />
+                    >
+                      <option value="">Select brand</option>
+                      {[...new Set([...(brandOptions || []), row.brand].filter(Boolean))].map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td>
                     <select
@@ -349,7 +358,7 @@ export default function InventoryEntry() {
                       }
                     >
                       <option value="">Select outlet</option>
-                      {OUTLETS.map((o) => (
+                      {(outletOptions || []).map((o) => (
                         <option key={o} value={o}>
                           {o}
                         </option>

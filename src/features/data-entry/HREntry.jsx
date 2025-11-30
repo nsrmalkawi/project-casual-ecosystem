@@ -7,7 +7,11 @@ function makeId() {
   return Date.now().toString() + "-" + Math.random().toString(16).slice(2);
 }
 
-export default function HREntry() {
+export default function HREntry({
+  brandOptions = BRAND_OPTIONS,
+  outletOptions = OUTLET_OPTIONS,
+  roleOptions = HR_ROLES,
+} = {}) {
   const [rows, setRows] = useState(() => loadData("pc_hr_labor", []) || []);
   const API_BASE = import.meta.env.VITE_API_BASE || "";
   const apiUrl = (path) =>
@@ -146,11 +150,11 @@ export default function HREntry() {
                       }
                     >
                       <option value="">Select brand…</option>
-                      {BRAND_OPTIONS.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
+                {brandOptions.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
                     </select>
                   </td>
                   <td>
@@ -161,11 +165,11 @@ export default function HREntry() {
                       }
                     >
                       <option value="">Select outlet…</option>
-                      {OUTLET_OPTIONS.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
+                {outletOptions.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
                     </select>
                   </td>
                   <td>
@@ -185,11 +189,11 @@ export default function HREntry() {
                       }
                     >
                       <option value="">Select role…</option>
-                      {HR_ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
+                {roleOptions.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
                     </select>
                   </td>
                   <td>

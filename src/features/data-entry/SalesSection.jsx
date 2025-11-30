@@ -2,11 +2,7 @@
 import { useState, useEffect } from "react";
 import { loadData } from "../../utils/storage";
 import { validateRow, validateRows } from "../../utils/validation";
-import {
-  BRANDS,
-  OUTLETS,
-  SALES_CHANNELS,
-} from "../../config/lookups";
+import { BRANDS, OUTLETS, SALES_CHANNELS } from "../../config/lookups";
 import { SALES_FIELDS } from "../../config/dataModel";
 import { exportToCsv, parseCsvTextToRows } from "../../utils/csv";
 
@@ -22,7 +18,11 @@ function normalizeRow(raw) {
   return raw;
 }
 
-function SalesSection() {
+function SalesSection({
+  brandOptions = BRANDS,
+  outletOptions = OUTLETS,
+  channelOptions = SALES_CHANNELS,
+} = {}) {
   const [rows, setRows] = useState(() => {
     const stored = loadData("pc_sales", []) || [];
     const normalized = stored.map(normalizeRow).filter((r) => r !== null);
@@ -383,7 +383,7 @@ function SalesSection() {
                         }
                       >
                         <option value="">Select brand</option>
-                        {BRANDS.map((b) => (
+                        {brandOptions.map((b) => (
                           <option key={b} value={b}>
                             {b}
                           </option>
@@ -410,7 +410,7 @@ function SalesSection() {
                         }
                       >
                         <option value="">Select outlet</option>
-                        {OUTLETS.map((o) => (
+                        {outletOptions.map((o) => (
                           <option key={o} value={o}>
                             {o}
                           </option>
@@ -437,7 +437,7 @@ function SalesSection() {
                         }
                       >
                         <option value="">Select channel</option>
-                        {SALES_CHANNELS.map((c) => (
+                        {channelOptions.map((c) => (
                           <option key={c} value={c}>
                             {c}
                           </option>

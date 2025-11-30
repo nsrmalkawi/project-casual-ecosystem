@@ -46,7 +46,10 @@ function normalizeRow(raw) {
   };
 }
 
-function PurchasesEntry() {
+function PurchasesEntry({
+  brandOptions = BRANDS,
+  outletOptions = OUTLETS,
+} = {}) {
   const [rows, setRows] = useState(() => {
     const stored = loadData("pc_purchases", []) || [];
     const normalized = stored.map(normalizeRow).filter((r) => r !== null);
@@ -400,7 +403,7 @@ function PurchasesEntry() {
                         }
                       >
                         <option value="">Select brand</option>
-                        {BRANDS.map((b) => (
+                        {brandOptions.map((b) => (
                           <option key={b} value={b}>
                             {b}
                           </option>
@@ -427,7 +430,7 @@ function PurchasesEntry() {
                         }
                       >
                         <option value="">Select outlet</option>
-                        {OUTLETS.map((o) => (
+                        {outletOptions.map((o) => (
                           <option key={o} value={o}>
                             {o}
                           </option>

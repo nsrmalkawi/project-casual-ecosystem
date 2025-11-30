@@ -49,3 +49,6 @@ Frontend (Static Site)
 
 ## Mobile responsiveness
 The layout adapts under 900px: stacked panels, wrapped nav buttons, compressed padding, and horizontal scroll on tables.
+
+## Keep git main updated
+Run `scripts/update-main.sh` to ensure a local `main` branch exists and is up to date. The script creates `main` from your current branch when missing, fetches `origin/main` if a remote exists, attempts a fast-forward merge, and returns you to your starting branch.
