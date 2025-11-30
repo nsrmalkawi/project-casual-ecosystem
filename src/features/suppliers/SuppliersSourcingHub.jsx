@@ -67,7 +67,7 @@ const blankContact = {
 
 function sanitizePriceInput(value) {
   if (value === null || value === undefined) return "";
-  const str = String(value).trim();
+  const str = String(value).trim().replace(",", ".");
   if (str === "") return "";
   const num = Number(str);
   return Number.isNaN(num) ? "" : num;
@@ -1258,10 +1258,9 @@ function ComparisonSection({ refreshKey }) {
                     <td>{r.uom}</td>
                 <td>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="text"
                     inputMode="decimal"
+                    pattern="[0-9]*[\\.,]?[0-9]*"
                     placeholder="0.00"
                     value={formatPriceDisplay(r.priceSupplier1)}
                     onChange={(e) => updatePriceField(r.id, "priceSupplier1", e.target.value)}
@@ -1271,10 +1270,9 @@ function ComparisonSection({ refreshKey }) {
                 </td>
                 <td>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="text"
                     inputMode="decimal"
+                    pattern="[0-9]*[\\.,]?[0-9]*"
                     placeholder="0.00"
                     value={formatPriceDisplay(r.priceSupplier2)}
                     onChange={(e) => updatePriceField(r.id, "priceSupplier2", e.target.value)}
@@ -1284,10 +1282,9 @@ function ComparisonSection({ refreshKey }) {
                 </td>
                 <td>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="text"
                     inputMode="decimal"
+                    pattern="[0-9]*[\\.,]?[0-9]*"
                     placeholder="0.00"
                     value={formatPriceDisplay(r.priceSupplier3)}
                     onChange={(e) => updatePriceField(r.id, "priceSupplier3", e.target.value)}
@@ -1333,10 +1330,9 @@ function ComparisonSection({ refreshKey }) {
             <div key={field.key} style={{ display: "flex", flexDirection: "column" }}>
               <label>{field.label}</label>
               <input
-                type={field.key.startsWith("price") || field.key === "lowestPrice" ? "number" : "text"}
-                step="0.01"
-                min={field.key.startsWith("price") ? "0" : undefined}
+                type={field.key.startsWith("price") || field.key === "lowestPrice" ? "text" : "text"}
                 inputMode={field.key.startsWith("price") ? "decimal" : undefined}
+                pattern={field.key.startsWith("price") ? "[0-9]*[\\.,]?[0-9]*" : undefined}
                 placeholder={field.key.startsWith("price") ? "0.00" : ""}
                 value={
                   field.key.startsWith("price") || field.key === "lowestPrice"
@@ -1351,9 +1347,10 @@ function ComparisonSection({ refreshKey }) {
                 }
                 onBlur={(e) => {
                   if (field.key.startsWith("price")) {
+                    const cleaned = sanitizePriceInput(e.target.value);
                     setNewRow((prev) => ({
                       ...prev,
-                      [field.key]: sanitizePriceInput(e.target.value) === "" ? "" : Number(e.target.value || 0),
+                      [field.key]: cleaned === "" ? "" : cleaned,
                     }));
                   }
                 }}
