@@ -1,7 +1,12 @@
 // src/features/data-entry/WasteEntry.jsx
 import { useState, useEffect } from "react";
 import { loadData, saveData } from "../../utils/storage";
-import { BRANDS, OUTLETS } from "../../config/lookups";
+import {
+  BRANDS,
+  OUTLETS,
+  PRIMARY_BRAND,
+  PRIMARY_OUTLET,
+} from "../../config/lookups";
 
 const STORAGE_KEY = "pc_waste";
 
@@ -10,10 +15,13 @@ function WasteEntry({
   outletOptions = OUTLETS,
   wasteReasonOptions = [],
 } = {}) {
+  const primaryBrand = brandOptions[0] || PRIMARY_BRAND || "";
+  const primaryOutlet = outletOptions[0] || PRIMARY_OUTLET || "";
+
   const [form, setForm] = useState({
     date: "",
-    brand: "",
-    outlet: "",
+    brand: primaryBrand,
+    outlet: primaryOutlet,
     category: "",
     itemName: "",
     quantity: "",
@@ -30,7 +38,13 @@ function WasteEntry({
     API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
 
   useEffect(() => {
-    setRows(loadData(STORAGE_KEY, []));
+    const stored =
+      (loadData(STORAGE_KEY, []) || []).map((r) => ({
+        ...r,
+        brand: r.brand || primaryBrand,
+        outlet: r.outlet || primaryOutlet,
+      }));
+    setRows(stored);
   }, []);
 
   useEffect(() => {
@@ -57,8 +71,8 @@ function WasteEntry({
 
     setForm({
       date: "",
-      brand: "",
-      outlet: "",
+      brand: primaryBrand,
+      outlet: primaryOutlet,
       category: "",
       itemName: "",
       quantity: "",

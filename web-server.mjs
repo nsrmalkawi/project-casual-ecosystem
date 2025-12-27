@@ -195,6 +195,6 @@ app.get(/^(?!\/api\/).*/, (req, res) => {
 
 app.listen(PORT, () => {
   console.log(
-    `Project Casual ecosystem server listening on http://localhost:${PORT}`
+    `Marley's Burger server listening on http://localhost:${PORT}`
   );
 });

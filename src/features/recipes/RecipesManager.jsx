@@ -3,12 +3,13 @@ import { useState, useEffect, useMemo } from "react";
 import useRecipes, {
   computeRecipeCostPerPortion,
 } from "../../hooks/useRecipes";
+import { PRIMARY_BRAND, PRIMARY_OUTLET } from "../../config/lookups";
 
 const emptyRecipe = {
   id: "",
   name: "",
-  brand: "",
-  outlet: "",
+  brand: PRIMARY_BRAND,
+  outlet: PRIMARY_OUTLET,
   category: "",
   portionSize: "",
   sellPrice: "",

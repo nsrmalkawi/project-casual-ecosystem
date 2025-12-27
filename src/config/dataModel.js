@@ -1,5 +1,5 @@
 // src/config/dataModel.js
-// Central definition of all main data structures for Project Casual ecosystem.
+// Central definition of all main data structures for Marley's Burger ecosystem.
 
 export const SALES_FIELDS = [
   { key: "date", label: "Date", type: "date", required: true },

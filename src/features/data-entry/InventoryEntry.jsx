@@ -2,7 +2,12 @@
 import { useEffect, useState } from "react";
 import { loadData } from "../../utils/storage";
 import { validateRow, validateRows } from "../../utils/validation";
-import { BRANDS, OUTLETS } from "../../config/lookups";
+import {
+  BRANDS,
+  OUTLETS,
+  PRIMARY_BRAND,
+  PRIMARY_OUTLET,
+} from "../../config/lookups";
 import { INVENTORY_FIELDS } from "../../config/dataModel";
 import { exportToCsv, parseCsvTextToRows } from "../../utils/csv";
 
@@ -20,19 +25,30 @@ export default function InventoryEntry({
   brandOptions = BRANDS,
   outletOptions = OUTLETS,
 } = {}) {
+  const primaryBrand = brandOptions[0] || PRIMARY_BRAND || "";
+  const primaryOutlet = outletOptions[0] || PRIMARY_OUTLET || "";
+
   const [rows, setRows] = useState(() => {
     const stored = loadData("pc_inventory", []) || [];
     const normalized = stored.map(normalizeRow).filter((r) => r !== null);
-    return normalized.length > 0
-      ? normalized
+    const hydrated =
+      normalized.length > 0
+        ? normalized.map((r) => ({
+            ...r,
+            brand: r.brand || primaryBrand,
+            defaultOutlet: r.defaultOutlet || primaryOutlet,
+          }))
+        : [];
+    return hydrated.length > 0
+      ? hydrated
       : [
           {
             id: makeId(),
             itemCode: "",
             itemName: "",
             category: "",
-            brand: "",
-            defaultOutlet: "",
+            brand: primaryBrand,
+            defaultOutlet: primaryOutlet,
             unit: "",
             parLevel: "",
             minLevel: "",
@@ -98,8 +114,8 @@ export default function InventoryEntry({
         itemCode: "",
         itemName: "",
         category: "",
-        brand: "",
-        defaultOutlet: "",
+        brand: primaryBrand,
+        defaultOutlet: primaryOutlet,
         unit: "",
         parLevel: "",
         minLevel: "",

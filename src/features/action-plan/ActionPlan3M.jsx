@@ -683,7 +683,7 @@ export default function ActionPlan3M() {
   return (
     <div className="page">
       <h2 style={{ marginBottom: 6 }}>Action Plan (3M)</h2>
-      <p className="page-subtitle">3-month action tracker for Project Casual with imports, dashboard, and AI summary.</p>
+      <p className="page-subtitle">3-month action tracker for Marley's Burger with imports, dashboard, and AI summary.</p>
 
       <SummaryCards rows={filtered} />
 

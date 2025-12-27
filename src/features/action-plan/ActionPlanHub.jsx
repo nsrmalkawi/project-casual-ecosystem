@@ -1,6 +1,7 @@
 // src/features/action-plan/ActionPlanHub.jsx
 import { useEffect, useMemo, useState } from "react";
 import { callAi } from "../../utils/aiClient";
+import { PRIMARY_BRAND, PRIMARY_OUTLET } from "../../config/lookups";
 
 const STORAGE_KEY = "pc_action_plan";
 
@@ -38,8 +39,8 @@ function ActionPlanHub() {
     id: null,
     title: "",
     area: "",
-    brand: "",
-    outlet: "",
+    brand: PRIMARY_BRAND,
+    outlet: PRIMARY_OUTLET,
     owner: "",
     status: "Planned",
     priority: "Medium",
@@ -103,8 +104,8 @@ function ActionPlanHub() {
       id: null,
       title: "",
       area: "",
-      brand: "",
-      outlet: "",
+      brand: PRIMARY_BRAND,
+      outlet: PRIMARY_OUTLET,
       owner: "",
       status: "Planned",
       priority: "Medium",
@@ -201,7 +202,7 @@ function ActionPlanHub() {
     <div>
       <h2 className="page-title">Action Plan Tracker</h2>
       <p className="page-subtitle">
-        Track your Project Casual enhancement plan: owners,
+        Track your Marley's Burger enhancement plan: owners,
         deadlines, KPIs, and follow-up. Use AI to brainstorm new
         actions.
       </p>

@@ -1,5 +1,6 @@
 // src/features/targets/TargetsHub.jsx
 import { useEffect, useState } from "react";
+import { PRIMARY_BRAND, PRIMARY_OUTLET } from "../../config/lookups";
 
 // Simple ID generator
 function makeId() {
@@ -31,6 +32,8 @@ function useLocalArray(key) {
 
 function TargetsHub() {
   const [targets, setTargets] = useLocalArray("pc_targets");
+  const primaryBrand = PRIMARY_BRAND;
+  const primaryOutlet = PRIMARY_OUTLET;
 
   const addRow = () => {
     setTargets((prev) => [
@@ -38,8 +41,8 @@ function TargetsHub() {
       {
         id: makeId(),
         yearMonth: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         salesTarget: "",
         foodCostPctTarget: "",
         laborPctTarget: "",

@@ -6,6 +6,8 @@ import {
   BRANDS,
   OUTLETS,
   PETTY_CASH_CATEGORIES,
+  PRIMARY_BRAND,
+  PRIMARY_OUTLET,
 } from "../../config/lookups";
 import { PETTY_CASH_FIELDS } from "../../config/dataModel";
 import { exportToCsv, parseCsvTextToRows } from "../../utils/csv";
@@ -21,17 +23,28 @@ function normalizeRow(raw) {
 }
 
 function PettyCashEntry() {
+  const primaryBrand = BRANDS[0] || PRIMARY_BRAND || "";
+  const primaryOutlet = OUTLETS[0] || PRIMARY_OUTLET || "";
+
   const [rows, setRows] = useState(() => {
     const stored = loadData("pc_petty_cash", []) || [];
     const normalized = stored.map(normalizeRow).filter((r) => r !== null);
-    return normalized.length > 0
-      ? normalized
+    const hydrated =
+      normalized.length > 0
+        ? normalized.map((r) => ({
+            ...r,
+            brand: r.brand || primaryBrand,
+            outlet: r.outlet || primaryOutlet,
+          }))
+        : [];
+    return hydrated.length > 0
+      ? hydrated
       : [
           {
             id: makeId(),
             date: "",
-            brand: "",
-            outlet: "",
+            brand: primaryBrand,
+            outlet: primaryOutlet,
             category: "",
             description: "",
             amount: "",
@@ -98,8 +111,8 @@ function PettyCashEntry() {
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         category: "",
         description: "",
         amount: "",

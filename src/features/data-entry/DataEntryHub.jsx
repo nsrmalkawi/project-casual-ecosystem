@@ -84,6 +84,9 @@ function DataEntryHub() {
     }
   }, []);
 
+  const primaryBrand = brandOptions[0] || DEFAULT_BRANDS[0] || "";
+  const primaryOutlet = outletOptions[0] || DEFAULT_OUTLETS[0] || "";
+
   const formatNumber = (n) => {
     const x = Number(n || 0);
     if (Number.isNaN(x)) return "0.000";
@@ -126,8 +129,8 @@ function DataEntryHub() {
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         netSales: "",
         notes: "",
       },
@@ -243,8 +246,8 @@ function DataEntryHub() {
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         supplier: "",
         totalCost: "",
         notes: "",
@@ -379,8 +382,8 @@ function DataEntryHub() {
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         item: "",
         qty: "",
         unit: "",
@@ -565,8 +568,8 @@ function DataEntryHub() {
         id: makeId(),
         itemCode: "",
         itemName: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         unit: "",
         currentQty: "",
         unitCost: "",
@@ -738,7 +741,7 @@ function DataEntryHub() {
       {
         id: makeId(),
         date: "",
-        outlet: "",
+        outlet: primaryOutlet,
         employee: "",
         role: "",
         hours: "",
@@ -890,8 +893,8 @@ function DataEntryHub() {
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         category: "",
         description: "",
         amount: "",
@@ -1099,7 +1102,7 @@ function DataEntryHub() {
     <div>
       <h2 className="page-title">Data Entry Hub</h2>
       <p className="page-subtitle">
-        Maintain core data for the Project Casual ecosystem. Values are stored
+        Maintain core data for the Marley's Burger ecosystem. Values are stored
         locally under <code>pc_*</code> keys and used by reporting, menu
         engineering, reconciliation, and AI insights.
       </p>

@@ -3,24 +3,11 @@ import { loadData } from "../utils/storage";
 
 // ---- Default master data lists ----
 
-export const DEFAULT_BRANDS = [
-  "Buns Meat Dough",
-  "Fish Face",
-  "Call Me Margherita",
-  "Free The Fork",
-  "Death by Crab",
-  "Feast Hub",
-  "Other",
-];
-
-export const DEFAULT_OUTLETS = [
-  "Abdoun Dine-in",
-  "Abdoun Takeaway",
-  "Cloud Kitchen",
-  "Mall Kiosk",
-  "Events / Catering",
-  "Other",
-];
+export const DEFAULT_BRANDS = ["Marley's Burger"];
+export const DEFAULT_OUTLETS = ["Marley's Burger Main Outlet"];
+export const PRIMARY_BRAND = DEFAULT_BRANDS[0];
+export const PRIMARY_OUTLET = DEFAULT_OUTLETS[0];
+export const PRIMARY_BRAND_KEY = "marleys_burger";
 
 // Common sales channels
 export const SALES_CHANNELS = [
@@ -104,10 +91,9 @@ function saveList(key, arr) {
 }
 
 export function getMasterData() {
-  const brands =
-    loadData("pc_brand_options", DEFAULT_BRANDS) || DEFAULT_BRANDS;
-  const outlets =
-    loadData("pc_outlet_options", DEFAULT_OUTLETS) || DEFAULT_OUTLETS;
+  // Force single-restaurant exposure; other lists remain user-editable.
+  const brands = DEFAULT_BRANDS;
+  const outlets = DEFAULT_OUTLETS;
   const wasteReasons =
     loadData("pc_waste_reason_options", DEFAULT_WASTE_REASONS) ||
     DEFAULT_WASTE_REASONS;

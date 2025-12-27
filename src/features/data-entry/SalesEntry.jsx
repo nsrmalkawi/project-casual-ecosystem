@@ -1,7 +1,12 @@
 // src/features/data-entry/SalesEntry.jsx
 import { useEffect, useState } from "react";
 import { loadData, saveData } from "../../utils/storage";
-import { BRAND_OPTIONS, OUTLET_OPTIONS } from "../../config/lookups";
+import {
+  BRAND_OPTIONS,
+  OUTLET_OPTIONS,
+  PRIMARY_BRAND,
+  PRIMARY_OUTLET,
+} from "../../config/lookups";
 
 function makeId() {
   return Date.now().toString() + "-" + Math.random().toString(16).slice(2);
@@ -20,8 +25,8 @@ export default function SalesEntry() {
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: PRIMARY_BRAND,
+        outlet: PRIMARY_OUTLET,
         netSales: "",
         notes: "",
       },

@@ -4,6 +4,7 @@ import useRecipes, {
   computeRecipeCostPerPortion,
 } from "../../hooks/useRecipes";
 import { loadData } from "../../utils/storage";
+import { PRIMARY_BRAND, PRIMARY_OUTLET } from "../../config/lookups";
 
 const WASTE_KEY = "pc_waste";
 
@@ -12,8 +13,8 @@ function RecipeWasteEntry() {
 
   const [form, setForm] = useState({
     date: "",
-    brand: "",
-    outlet: "",
+    brand: PRIMARY_BRAND,
+    outlet: PRIMARY_OUTLET,
     recipeId: "",
     portions: "",
     reason: "",

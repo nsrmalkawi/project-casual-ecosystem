@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { PRIMARY_BRAND, PRIMARY_OUTLET } from "./config/lookups";
 const DataContext = createContext();
 
 export const useData = () => useContext(DataContext);
 
 export const DataProvider = ({ children }) => {
   const [logo, setLogo] = useState(null);
-  const [brandFilter, setBrandFilter] = useState("");
-  const [outletFilter, setOutletFilter] = useState("");
+  const [brandFilter, setBrandFilter] = useState(PRIMARY_BRAND);
+  const [outletFilter, setOutletFilter] = useState(PRIMARY_OUTLET);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -20,8 +21,8 @@ export const DataProvider = ({ children }) => {
     if (savedFilters) {
       try {
         const parsed = JSON.parse(savedFilters);
-        setBrandFilter(parsed.brandFilter || "");
-        setOutletFilter(parsed.outletFilter || "");
+        setBrandFilter(PRIMARY_BRAND);
+        setOutletFilter(PRIMARY_OUTLET);
         setStartDate(parsed.startDate || "");
         setEndDate(parsed.endDate || "");
       } catch {
@@ -33,8 +34,8 @@ export const DataProvider = ({ children }) => {
   // Persist filters
   useEffect(() => {
     const payload = {
-      brandFilter,
-      outletFilter,
+      brandFilter: PRIMARY_BRAND,
+      outletFilter: PRIMARY_OUTLET,
       startDate,
       endDate,
     };

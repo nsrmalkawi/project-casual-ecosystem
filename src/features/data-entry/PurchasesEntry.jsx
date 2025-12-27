@@ -2,7 +2,12 @@
 import { useState, useEffect } from "react";
 import { loadData } from "../../utils/storage";
 import { validateRow, validateRows } from "../../utils/validation";
-import { BRANDS, OUTLETS } from "../../config/lookups";
+import {
+  BRANDS,
+  OUTLETS,
+  PRIMARY_BRAND,
+  PRIMARY_OUTLET,
+} from "../../config/lookups";
 import { exportToCsv, parseCsvTextToRows } from "../../utils/csv";
 
 const PURCHASE_FIELDS = [
@@ -50,17 +55,28 @@ function PurchasesEntry({
   brandOptions = BRANDS,
   outletOptions = OUTLETS,
 } = {}) {
+  const primaryBrand = brandOptions[0] || PRIMARY_BRAND || "";
+  const primaryOutlet = outletOptions[0] || PRIMARY_OUTLET || "";
+
   const [rows, setRows] = useState(() => {
     const stored = loadData("pc_purchases", []) || [];
     const normalized = stored.map(normalizeRow).filter((r) => r !== null);
-    return normalized.length > 0
-      ? normalized
+    const hydrated =
+      normalized.length > 0
+        ? normalized.map((r) => ({
+            ...r,
+            brand: r.brand || primaryBrand,
+            outlet: r.outlet || primaryOutlet,
+          }))
+        : [];
+    return hydrated.length > 0
+      ? hydrated
       : [
           {
             id: makeId(),
             date: "",
-            brand: "",
-            outlet: "",
+            brand: primaryBrand,
+            outlet: primaryOutlet,
             supplier: "",
             category: "",
             itemName: "",
@@ -132,8 +148,8 @@ function PurchasesEntry({
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         supplier: "",
         category: "",
         itemName: "",

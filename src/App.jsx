@@ -21,6 +21,7 @@ import ExecutiveDashboard from "./features/dashboard/ExecutiveDashboard";
 
 import { useData } from "./DataContext";
 import { APP_USERS } from "./authConfig";
+import { PRIMARY_BRAND, PRIMARY_OUTLET } from "./config/lookups";
 
 // Navigation map with role access
 const NAV_ITEMS = [
@@ -151,35 +152,9 @@ function App() {
 
   // Compute brand/outlet options from stored datasets (hooks must stay before any return)
   const { navBrandOptions, navOutletOptions } = useMemo(() => {
-    const keys = [
-      "pc_sales",
-      "pc_purchases",
-      "pc_waste",
-      "pc_rent_opex",
-      "pc_hr_labor",
-      "pc_petty_cash",
-      "pc_menu_items",
-      "pc_recipes",
-    ];
-    const brands = new Set();
-    const outlets = new Set();
-    keys.forEach((k) => {
-      try {
-        const raw = localStorage.getItem(k);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return;
-        parsed.forEach((row) => {
-          if (row.brand) brands.add(String(row.brand));
-          if (row.outlet) outlets.add(String(row.outlet));
-        });
-      } catch {
-        // ignore malformed data
-      }
-    });
     return {
-      navBrandOptions: ["", ...Array.from(brands).sort()],
-      navOutletOptions: ["", ...Array.from(outlets).sort()],
+      navBrandOptions: ["", PRIMARY_BRAND],
+      navOutletOptions: ["", PRIMARY_OUTLET],
     };
   }, []);
 
@@ -195,7 +170,7 @@ function App() {
               style={{ maxWidth: '150px', height: 'auto', marginBottom: '1rem' }}
             />
           )}
-          <h1>Project Casual Ecosystem</h1>
+          <h1>Marley's Burger</h1>
           <p className="page-subtitle">
             Sign in to access your F&amp;B performance cockpit.
           </p>
@@ -270,13 +245,13 @@ function App() {
           <div className="logo-wrapper">
             <img
               src={logo || "/logo.png"}
-              alt="Project Casual"
+              alt="Marley's Burger"
               className="app-logo"
             />
           </div>
           <div className="brand-text">
-            <h1>Project Casual Ecosystem</h1>
-            <p>Multi-brand F&amp;B performance &amp; action hub</p>
+            <h1>Marley's Burger</h1>
+            <p>F&amp;B performance &amp; action hub</p>
           </div>
         </div>
 
@@ -394,8 +369,8 @@ function App() {
             type="button"
             className="secondary-btn"
             onClick={() => {
-              setBrandFilter("");
-              setOutletFilter("");
+              setBrandFilter(PRIMARY_BRAND);
+              setOutletFilter(PRIMARY_OUTLET);
               setStartDate("");
               setEndDate("");
             }}

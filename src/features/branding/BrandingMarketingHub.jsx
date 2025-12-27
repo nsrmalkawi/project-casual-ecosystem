@@ -1,6 +1,7 @@
 // src/features/branding/BrandingMarketingHub.jsx
 import { useState, useEffect } from "react";
 import { loadData } from "../../utils/storage";
+import { PRIMARY_BRAND } from "../../config/lookups";
 
 function makeId() {
   return Date.now().toString() + "-" + Math.random().toString(16).slice(2);
@@ -25,7 +26,7 @@ function BrandingMarketingHub() {
   const [brandProfile, setBrandProfile] = useState(() => {
     const storedProfile = loadData("pc_brand_profile", {});
     return {
-      brandName: "",
+      brandName: storedProfile.brandName || PRIMARY_BRAND,
       mission: "", // Added mission field
       values: "",
       brandVoice: "",
@@ -131,7 +132,7 @@ function BrandingMarketingHub() {
     <div>
       <h2 className="page-title">Branding & Marketing</h2>
       <p className="page-subtitle">
-        Plan and track Project Casual&apos;s brand identity, digital and offline
+        Plan and track Marley's Burger&apos;s brand identity, digital and offline
         marketing, loyalty programs, and community engagement. This section
         focuses on brand consistency, customer experience, and growth tactics.
       </p>
@@ -160,7 +161,7 @@ function BrandingMarketingHub() {
               onChange={(e) =>
                 handleBrandProfileChange("brandName", e.target.value)
               }
-              placeholder="Project Casual, Buns Meat Dough, etc."
+              placeholder="Marley's Burger, flagship campaigns, etc."
             />
           </div>
 

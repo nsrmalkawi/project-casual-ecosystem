@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import SupplierPerformanceHub from "./SupplierPerformanceHub";
 import { exportToCsv } from "../../utils/csv";
 import { useData } from "../../DataContext";
+import { PRIMARY_BRAND } from "../../config/lookups";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE || (typeof window !== "undefined" ? window.location.origin : "");
@@ -30,7 +31,7 @@ const comparisonFields = [
 
 const blankComparison = {
   category: "",
-  brand: "",
+  brand: PRIMARY_BRAND,
   menuSection: "",
   item: "",
   specNotes: "",
@@ -1067,7 +1068,11 @@ function ComparisonSection({ refreshKey }) {
   }, [rows, filters]);
 
   const categoryOptions = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))), [rows]);
-  const brandOptions = useMemo(() => Array.from(new Set(rows.map((r) => r.brand).filter(Boolean))), [rows]);
+  const brandOptions = useMemo(() => {
+    const set = new Set([PRIMARY_BRAND]);
+    rows.forEach((r) => r.brand && set.add(r.brand));
+    return Array.from(set).sort();
+  }, [rows]);
   const menuOptions = useMemo(
     () => Array.from(new Set(rows.map((r) => r.menuSection).filter(Boolean))),
     [rows]

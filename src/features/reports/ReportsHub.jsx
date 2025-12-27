@@ -17,6 +17,7 @@ import { loadData } from "../../utils/storage";
 import AlertsSummaryBox from "./AlertsSummaryBox";
 import { callAi } from "../../utils/aiClient";
 import { useData } from "../../DataContext";
+import { PRIMARY_BRAND, PRIMARY_OUTLET } from "../../config/lookups";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ||
@@ -108,23 +109,9 @@ function ReportsHub() {
     setEndDate,
   } = useData();
 
-  const allBrands = useMemo(() => {
-    const set = new Set();
-    [...sales, ...purchases, ...waste].forEach((r) => {
-      if (r.brand) set.add(r.brand);
-    });
-    return Array.from(set).sort();
-  }, [sales, purchases, waste]);
+  const allBrands = useMemo(() => [PRIMARY_BRAND], []);
 
-  const allOutlets = useMemo(() => {
-    const set = new Set();
-    [...sales, ...purchases, ...waste, ...rentOpex, ...hr, ...pettyCash].forEach(
-      (r) => {
-        if (r.outlet) set.add(r.outlet);
-      }
-    );
-    return Array.from(set).sort();
-  }, [sales, purchases, waste, rentOpex, hr, pettyCash]);
+  const allOutlets = useMemo(() => [PRIMARY_OUTLET], []);
 
   function passesFilters(row) {
     if (!row) return false;
@@ -718,7 +705,7 @@ function ReportsHub() {
     <div>
       <h2 className="page-title">Reports & Dashboard</h2>
       <p className="page-subtitle">
-        Visualize Project Casual performance by brand, outlet, and period. All
+        Visualize Marley's Burger performance by brand, outlet, and period. All
         metrics are read from the Data Entry Hub (localStorage).
       </p>
 
@@ -914,7 +901,7 @@ function ReportsHub() {
         <h3 className="card-title">AI Insights</h3>
         <p className="page-subtitle">
           Let AI scan current metrics for anomalies and propose an improvement
-          action plan for Project Casual.
+          action plan for Marley's Burger.
         </p>
 
         <div

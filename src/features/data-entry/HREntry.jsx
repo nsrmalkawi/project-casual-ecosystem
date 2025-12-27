@@ -1,7 +1,13 @@
 // src/features/data-entry/HREntry.jsx
 import { useEffect, useState } from "react";
 import { loadData, saveData } from "../../utils/storage";
-import { OUTLET_OPTIONS, HR_ROLES, BRAND_OPTIONS } from "../../config/lookups";
+import {
+  OUTLET_OPTIONS,
+  HR_ROLES,
+  BRAND_OPTIONS,
+  PRIMARY_BRAND,
+  PRIMARY_OUTLET,
+} from "../../config/lookups";
 
 function makeId() {
   return Date.now().toString() + "-" + Math.random().toString(16).slice(2);
@@ -12,7 +18,36 @@ export default function HREntry({
   outletOptions = OUTLET_OPTIONS,
   roleOptions = HR_ROLES,
 } = {}) {
-  const [rows, setRows] = useState(() => loadData("pc_hr_labor", []) || []);
+  const primaryBrand = brandOptions[0] || PRIMARY_BRAND || "";
+  const primaryOutlet = outletOptions[0] || PRIMARY_OUTLET || "";
+
+  const [rows, setRows] = useState(() => {
+    const stored = loadData("pc_hr_labor", []) || [];
+    const hydrated = stored.map((r) => ({
+      ...r,
+      brand: r.brand || primaryBrand,
+      outlet: r.outlet || primaryOutlet,
+    }));
+    return hydrated.length
+      ? hydrated
+      : [
+          {
+            id: makeId(),
+            date: "",
+            brand: primaryBrand,
+            outlet: primaryOutlet,
+            employeeName: "",
+            role: "",
+            hours: "",
+            hourlyRate: "",
+            basePay: "",
+            overtimePay: "",
+            otherPay: "",
+            laborCost: "",
+            notes: "",
+          },
+        ];
+  });
   const API_BASE = import.meta.env.VITE_API_BASE || "";
   const apiUrl = (path) =>
     API_BASE ? `${API_BASE}${path}`.replace(/([^:]\/)\/+/g, "$1") : path;
@@ -46,8 +81,8 @@ export default function HREntry({
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         employeeName: "",
         role: "",
         hours: "",

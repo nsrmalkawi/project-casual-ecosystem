@@ -6,6 +6,8 @@ import {
   RENT_OPEX_CATEGORIES,
   BRAND_OPTIONS,
   RENT_FREQUENCY_OPTIONS,
+  PRIMARY_BRAND,
+  PRIMARY_OUTLET,
 } from "../../config/lookups";
 
 const FREQ_TO_MONTHS = {
@@ -132,6 +134,8 @@ export default function RentOpexEntry({
   categoryOptions = RENT_OPEX_CATEGORIES,
   frequencyOptions = RENT_FREQUENCY_OPTIONS,
 }) {
+  const primaryBrand = brandOptions[0] || PRIMARY_BRAND || "";
+  const primaryOutlet = outletOptions[0] || PRIMARY_OUTLET || "";
   const [rows, setRows] = useState(() => loadData("pc_rent_opex", []) || []);
   const API_BASE = import.meta.env.VITE_API_BASE || "";
   const apiUrl = (path) =>
@@ -141,6 +145,8 @@ export default function RentOpexEntry({
     setRows((prev) =>
       prev.map((row) => ({
         ...row,
+        brand: row.brand || primaryBrand,
+        outlet: row.outlet || primaryOutlet,
         frequency: row.frequency || "monthly",
       }))
     );
@@ -159,8 +165,8 @@ export default function RentOpexEntry({
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         category: "",
         landlord: "",
         frequency: "monthly",

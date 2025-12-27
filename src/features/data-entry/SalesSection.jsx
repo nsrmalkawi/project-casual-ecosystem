@@ -2,7 +2,13 @@
 import { useState, useEffect } from "react";
 import { loadData } from "../../utils/storage";
 import { validateRow, validateRows } from "../../utils/validation";
-import { BRANDS, OUTLETS, SALES_CHANNELS } from "../../config/lookups";
+import {
+  BRANDS,
+  OUTLETS,
+  SALES_CHANNELS,
+  PRIMARY_BRAND,
+  PRIMARY_OUTLET,
+} from "../../config/lookups";
 import { SALES_FIELDS } from "../../config/dataModel";
 import { exportToCsv, parseCsvTextToRows } from "../../utils/csv";
 
@@ -23,6 +29,9 @@ function SalesSection({
   outletOptions = OUTLETS,
   channelOptions = SALES_CHANNELS,
 } = {}) {
+  const primaryBrand = brandOptions[0] || PRIMARY_BRAND || "";
+  const primaryOutlet = outletOptions[0] || PRIMARY_OUTLET || "";
+
   const [rows, setRows] = useState(() => {
     const stored = loadData("pc_sales", []) || [];
     const normalized = stored.map(normalizeRow).filter((r) => r !== null);
@@ -32,8 +41,8 @@ function SalesSection({
           {
             id: makeId(),
             date: "",
-            brand: "",
-            outlet: "",
+            brand: primaryBrand,
+            outlet: primaryOutlet,
             channel: "",
             orders: "",
             covers: "",
@@ -140,8 +149,8 @@ function SalesSection({
       {
         id: makeId(),
         date: "",
-        brand: "",
-        outlet: "",
+        brand: primaryBrand,
+        outlet: primaryOutlet,
         channel: "",
         orders: "",
         covers: "",

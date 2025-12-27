@@ -1,6 +1,6 @@
-# Project Casual Ecosystem
+# Marley's Burger
 
-AI-assisted F&B analytics and operations toolkit built with React + Vite and a Node/Express backend. Supports Google Gemini for insights and a PostgreSQL (Neon) backend for persistence and exports (CSV/Excel).
+AI-assisted F&B analytics and operations toolkit for Marley's Burger, built with React + Vite and a Node/Express backend. Supports Google Gemini for insights and a PostgreSQL (Neon) backend for persistence and exports (CSV/Excel).
 
 ## Run locally
 1) Install deps: `npm install`

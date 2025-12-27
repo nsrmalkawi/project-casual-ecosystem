@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { hrAssessmentTemplate } from '../../config/hrAssessmentsConfig';
 import { useData } from '../../DataContext';
+import { PRIMARY_OUTLET } from '../../config/lookups';
 
 const API_BASE =
   import.meta.env.VITE_API_BASE || (typeof window !== "undefined" ? window.location.origin : "");
@@ -10,7 +11,7 @@ const DEFAULT_EMPLOYEE = {
   employeeId: "",
   name: "",
   role: "",
-  outlet: "",
+  outlet: PRIMARY_OUTLET,
   status: "Active",
   startDate: "",
   hourlyRate: "",
@@ -23,7 +24,7 @@ const DEFAULT_EMPLOYEE = {
 const DEFAULT_ATTENDANCE = {
   date: "",
   employeeId: "",
-  outlet: "",
+  outlet: PRIMARY_OUTLET,
   startTime: "",
   endTime: "",
   totalHours: "",
@@ -89,11 +90,11 @@ function HrHub() {
   const [attendance, setAttendance] = useState([]);
   const [attLoading, setAttLoading] = useState(false);
   const [attError, setAttError] = useState("");
-  const [attForm, setAttForm] = useState(() => ({ ...DEFAULT_ATTENDANCE, outlet: outletFilter || "" }));
+  const [attForm, setAttForm] = useState(() => ({ ...DEFAULT_ATTENDANCE, outlet: outletFilter || PRIMARY_OUTLET }));
   const [attFilters, setAttFilters] = useState({
     from: "",
     to: "",
-    outlet: outletFilter || "",
+    outlet: outletFilter || PRIMARY_OUTLET,
     employeeId: "",
   });
 
